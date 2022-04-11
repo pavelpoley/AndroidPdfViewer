@@ -32,8 +32,10 @@ import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.HandlerThread;
+import android.support.annotation.NonNull;
 import android.util.AttributeSet;
 import android.util.Log;
+import android.view.View;
 import android.widget.RelativeLayout;
 
 import com.github.barteksc.pdfviewer.exception.PageRenderingException;
@@ -244,8 +246,6 @@ public class PDFView extends RelativeLayout {
     /** Construct the initial view */
     public PDFView(Context context, AttributeSet set) {
         super(context, set);
-
-        renderingHandlerThread = new HandlerThread("PDF renderer");
 
         if (isInEditMode()) {
             return;
@@ -460,6 +460,13 @@ public class PDFView extends RelativeLayout {
             return;
         }
         animationManager.computeFling();
+    }
+
+    private HandlerThread getRenderingHandlerThread() {
+        if (renderingHandlerThread == null) {
+            renderingHandlerThread = new HandlerThread("PDF renderer");
+        }
+        return renderingHandlerThread;
     }
 
     @Override
@@ -753,10 +760,11 @@ public class PDFView extends RelativeLayout {
 
         this.pdfFile = pdfFile;
 
-        if (!renderingHandlerThread.isAlive()) {
-            renderingHandlerThread.start();
+        HandlerThread renderingThread = getRenderingHandlerThread();
+        if (!renderingThread.isAlive()) {
+            renderingThread.start();
         }
-        renderingHandler = new RenderingHandler(renderingHandlerThread.getLooper(), this);
+        renderingHandler = new RenderingHandler(renderingThread.getLooper(), this);
         renderingHandler.start();
 
         if (scrollHandle != null) {
