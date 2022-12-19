@@ -302,7 +302,12 @@ public class PDFView extends RelativeLayout {
             if (withAnimation) {
                 animationManager.startXAnimation(currentXOffset, offset);
             } else {
-                moveTo(offset, currentYOffset);
+                SnapEdge edge = this.findSnapEdge(page);
+                float xOffset = offset;
+                if(edge == SnapEdge.CENTER) {
+                    xOffset = -this.snapOffsetForPage(page, edge);
+                }
+                moveTo(xOffset, currentYOffset);
             }
         }
         showPage(page);
