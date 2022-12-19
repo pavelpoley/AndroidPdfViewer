@@ -634,7 +634,6 @@ public class PDFView extends RelativeLayout {
         // Draws thumbnails
         for (PagePart part : cacheManager.getThumbnails()) {
             drawPart(canvas, part);
-
         }
 
         // Draws parts
@@ -739,6 +738,24 @@ public class PDFView extends RelativeLayout {
         // Restore the canvas position
         canvas.translate(-localTranslationX, -localTranslationY);
 
+    }
+
+    public Bitmap getPdfPageImage(int page) {
+        Bitmap cover;
+        try {
+            pdfFile.openPage(page);
+            int w = Math.round(pdfFile.getMaxPageWidth());
+            int h = Math.round(pdfFile.getMaxPageHeight());
+            if (w == 0 || h == 0 || pdfFile.pageHasError(page)) {
+                return null;
+            }
+            Rect bounds = new Rect(0, 0, w, h);
+            cover = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+            pdfFile.renderPageBitmap(cover, page, bounds, false);
+            return cover;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     /**
