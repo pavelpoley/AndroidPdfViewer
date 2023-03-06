@@ -98,8 +98,8 @@ public class PDFView extends RelativeLayout {
 
     private static final String TAG = PDFView.class.getSimpleName();
 
-    public static final float DEFAULT_MAX_SCALE = 5.0f;
-    public static final float DEFAULT_MID_SCALE = 2.5f;
+    public static final float DEFAULT_MAX_SCALE = 3.0f;
+    public static final float DEFAULT_MID_SCALE = 1.6f;
     public static final float DEFAULT_MIN_SCALE = 1.0f;
 
     private float minZoom = DEFAULT_MIN_SCALE;
