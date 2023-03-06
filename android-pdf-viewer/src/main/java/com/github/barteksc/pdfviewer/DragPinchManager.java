@@ -282,6 +282,7 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
         pdfView.loadPages();
         hideHandle();
         scaling = false;
+        pdfView.callbacks.callOnScale(pdfView.getZoom());
     }
 
     @Override

@@ -193,6 +193,7 @@ class AnimationManager {
         public void onAnimationCancel(Animator animation) {
             pdfView.loadPages();
             hideHandle();
+	    pdfView.callbacks.callOnScale(pdfView.getZoom());
         }
 
         @Override
@@ -200,6 +201,7 @@ class AnimationManager {
             pdfView.loadPages();
             pdfView.performPageSnap();
             hideHandle();
+	    pdfView.callbacks.callOnScale(pdfView.getZoom());
         }
 
         @Override

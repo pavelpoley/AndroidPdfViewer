@@ -51,6 +51,7 @@ import com.github.barteksc.pdfviewer.listener.OnPageErrorListener;
 import com.github.barteksc.pdfviewer.listener.OnPageScrollListener;
 import com.github.barteksc.pdfviewer.listener.OnRenderListener;
 import com.github.barteksc.pdfviewer.listener.OnTapListener;
+import com.github.barteksc.pdfviewer.listener.OnScaleListener;
 import com.github.barteksc.pdfviewer.model.PagePart;
 import com.github.barteksc.pdfviewer.scroll.ScrollHandle;
 import com.github.barteksc.pdfviewer.source.AssetSource;
@@ -97,8 +98,8 @@ public class PDFView extends RelativeLayout {
 
     private static final String TAG = PDFView.class.getSimpleName();
 
-    public static final float DEFAULT_MAX_SCALE = 3.0f;
-    public static final float DEFAULT_MID_SCALE = 1.75f;
+    public static final float DEFAULT_MAX_SCALE = 5.0f;
+    public static final float DEFAULT_MID_SCALE = 2.5f;
     public static final float DEFAULT_MIN_SCALE = 1.0f;
 
     private float minZoom = DEFAULT_MIN_SCALE;
@@ -1375,6 +1376,8 @@ public class PDFView extends RelativeLayout {
 
         private OnTapListener onTapListener;
 
+        private OnScaleListener onScaleListener;
+
         private OnLongPressListener onLongPressListener;
 
         private OnPageErrorListener onPageErrorListener;
@@ -1476,6 +1479,11 @@ public class PDFView extends RelativeLayout {
             return this;
         }
 
+        public Configurator onScale(OnScaleListener onScaleListener) {
+            this.onScaleListener = onScaleListener;
+            return this;
+        }
+
         public Configurator onLongPress(OnLongPressListener onLongPressListener) {
             this.onLongPressListener = onLongPressListener;
             return this;
@@ -1565,6 +1573,7 @@ public class PDFView extends RelativeLayout {
             PDFView.this.callbacks.setOnPageScroll(onPageScrollListener);
             PDFView.this.callbacks.setOnRender(onRenderListener);
             PDFView.this.callbacks.setOnTap(onTapListener);
+            PDFView.this.callbacks.setOnScale(onScaleListener);
             PDFView.this.callbacks.setOnLongPress(onLongPressListener);
             PDFView.this.callbacks.setOnPageError(onPageErrorListener);
             PDFView.this.callbacks.setLinkHandler(linkHandler);
