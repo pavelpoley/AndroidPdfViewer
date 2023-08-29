@@ -15,8 +15,8 @@
  */
 package com.github.barteksc.pdfviewer.util;
 
-import com.shockwave.pdfium.util.Size;
-import com.shockwave.pdfium.util.SizeF;
+import com.vivlio.android.pdfium.util.Size;
+import com.vivlio.android.pdfium.util.SizeF;
 
 public class PageSizeCalculator {
 

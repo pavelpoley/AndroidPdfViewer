@@ -23,19 +23,20 @@ import android.util.SparseBooleanArray;
 import com.github.barteksc.pdfviewer.exception.PageRenderingException;
 import com.github.barteksc.pdfviewer.util.FitPolicy;
 import com.github.barteksc.pdfviewer.util.PageSizeCalculator;
-import com.shockwave.pdfium.PdfDocument;
-import com.shockwave.pdfium.PdfiumCore;
-import com.shockwave.pdfium.util.Size;
-import com.shockwave.pdfium.util.SizeF;
+import com.vivlio.android.pdfium.PdfDocument;
+import com.vivlio.android.pdfium.PdfiumCore;
+import com.vivlio.android.pdfium.util.Size;
+import com.vivlio.android.pdfium.util.SizeF;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 
 class PdfFile {
 
     private static final Object lock = new Object();
-    private PdfDocument pdfDocument;
-    private PdfiumCore pdfiumCore;
+    public PdfDocument pdfDocument;
+    public PdfiumCore pdfiumCore;
     private int pagesCount = 0;
     /** Original page sizes */
     private List<Size> originalPageSizes = new ArrayList<>();
@@ -55,6 +56,13 @@ class PdfFile {
     private boolean isVertical;
     /** Fixed spacing between pages in pixels */
     private int spacingPx;
+
+    // Fixed Spacing in top of first page
+    private int spacingTopPx;
+
+    // Fixed Spacing in bottom of first page
+    private int spacingBottomPx;
+
     /** Calculate spacing automatically so each page fits on it's own in the center of the view */
     private boolean autoSpacing;
     /** Calculated offsets for pages */
@@ -68,6 +76,7 @@ class PdfFile {
      * True if every page should fit separately according to the FitPolicy,
      * else the largest page fits and other pages scale relatively
      */
+
     private final boolean fitEachPage;
     /**
      * The pages the user want to display in order
@@ -76,7 +85,7 @@ class PdfFile {
     private int[] originalUserPages;
 
     PdfFile(PdfiumCore pdfiumCore, PdfDocument pdfDocument, FitPolicy pageFitPolicy, Size viewSize, int[] originalUserPages,
-            boolean isVertical, int spacing, boolean autoSpacing, boolean fitEachPage) {
+            boolean isVertical, int spacing, boolean autoSpacing, boolean fitEachPage, int spaceTop, int spaceBottom) {
         this.pdfiumCore = pdfiumCore;
         this.pdfDocument = pdfDocument;
         this.pageFitPolicy = pageFitPolicy;
@@ -85,6 +94,8 @@ class PdfFile {
         this.spacingPx = spacing;
         this.autoSpacing = autoSpacing;
         this.fitEachPage = fitEachPage;
+        this.spacingTopPx = spaceTop;
+        this.spacingBottomPx = spaceBottom;
         setup(viewSize);
     }
 
@@ -180,21 +191,16 @@ class PdfFile {
 
     private void prepareDocLen() {
         float length = 0;
-        for (int i = 0; i < getPagesCount(); i++) {
-            SizeF pageSize = pageSizes.get(i);
+        for (SizeF pageSize : pageSizes) {
             length += isVertical ? pageSize.getHeight() : pageSize.getWidth();
-            if (autoSpacing) {
-                length += pageSpacing.get(i);
-            } else if (i < getPagesCount() - 1) {
-                length += spacingPx;
-            }
         }
-        documentLength = length;
+        int spacing = (spacingPx * (pageSizes.size() - 1)) + spacingTopPx + spacingBottomPx;
+        documentLength = length + spacing;
     }
 
     private void preparePagesOffset() {
         pageOffsets.clear();
-        float offset = 0;
+        float offset = spacingTopPx;
         for (int i = 0; i < getPagesCount(); i++) {
             SizeF pageSize = pageSizes.get(i);
             float size = isVertical ? pageSize.getHeight() : pageSize.getWidth();
@@ -264,6 +270,13 @@ class PdfFile {
         return --currentPage >= 0 ? currentPage : 0;
     }
 
+    public long getLinkAtPos(int currentPage,float posX, float posY, SizeF size) {
+
+        return pdfiumCore.nativeGetLinkAtCoord(pdfDocument.mNativePagesPtr.get(currentPage), size.getWidth(), size.getHeight(), posX, posY);
+    }
+    public String getLinkTarget(long lnkPtr) {
+        return pdfiumCore.nativeGetLinkTarget(pdfDocument.mNativeDocPtr, lnkPtr);
+    }
     public boolean openPage(int pageIndex) throws PageRenderingException {
         int docPage = documentPage(pageIndex);
         if (docPage < 0) {
@@ -274,6 +287,7 @@ class PdfFile {
             if (openedPages.indexOfKey(docPage) < 0) {
                 try {
                     pdfiumCore.openPage(pdfDocument, docPage);
+
                     openedPages.put(docPage, true);
                     return true;
                 } catch (Exception e) {
@@ -312,6 +326,7 @@ class PdfFile {
 
     public List<PdfDocument.Link> getPageLinks(int pageIndex) {
         int docPage = documentPage(pageIndex);
+
         return pdfiumCore.getPageLinks(pdfDocument, docPage);
     }
 

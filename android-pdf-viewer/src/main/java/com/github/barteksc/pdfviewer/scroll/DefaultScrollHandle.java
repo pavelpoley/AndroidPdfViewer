@@ -4,12 +4,13 @@ import android.content.Context;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
 import android.os.Handler;
-import android.support.v4.content.ContextCompat;
 import android.util.TypedValue;
 import android.view.MotionEvent;
 import android.view.ViewGroup;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
+
+import androidx.core.content.ContextCompat;
 
 import com.github.barteksc.pdfviewer.PDFView;
 import com.github.barteksc.pdfviewer.R;
@@ -27,7 +28,7 @@ public class DefaultScrollHandle extends RelativeLayout implements ScrollHandle 
     protected Context context;
     private boolean inverted;
     private PDFView pdfView;
-    private float currentPos;
+    public float currentPos;
 
     private Handler handler = new Handler();
     private Runnable hidePageScrollerRunnable = new Runnable() {

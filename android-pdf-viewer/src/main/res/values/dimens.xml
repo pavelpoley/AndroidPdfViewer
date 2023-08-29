@@ -1,0 +1,50 @@
+<resources>
+    <!-- Default screen margins, per the Android Design guidelines. -->
+    <dimen name="activity_horizontal_margin">0dp</dimen>
+    <dimen name="activity_vertical_margin">0dp</dimen>
+    <dimen name="item_height">38dp</dimen>
+    
+    <dimen name="dictitle">35dp</dimen>
+    <dimen name="dtcover">25dp</dimen>
+    <dimen name="dtcoverL">2dp</dimen>
+	<dimen name="framew">10dp</dimen>
+	<dimen name="framew1">6dp</dimen>
+
+    <dimen name="section_div_height">0dp</dimen>
+    
+    <dimen name="design_snackbar_padding_vertical">4dp</dimen>
+    <dimen name="design_snackbar_padding_vertical_2lines">4dp</dimen>
+    <dimen name="sz_valve">28dp</dimen>
+    <dimen name="sz_handle">10dp</dimen>
+    
+    <dimen name="_50_">50dp</dimen>
+    <dimen name="_40_">40dp</dimen>
+    <dimen name="_45_">45dp</dimen>
+    <dimen name="abarmin">1dp</dimen>
+    <dimen name="abarmax">32dp</dimen>
+    
+    
+    <dimen name="diagMarginHor">28dp</dimen>
+    <dimen name="diagMarginVer">45dp</dimen>
+    
+    <dimen name="lvtextsize">16dp</dimen>
+    <dimen name="lvsubtextsize">9dp</dimen>
+	<dimen name="_35_">35dp</dimen>
+	<dimen name="_38_">38dp</dimen>
+	<dimen name="_25_">25dp</dimen>
+	<dimen name="_18_">18dp</dimen>
+	<dimen name="_65_">65dp</dimen>
+	<dimen name="_90_">90dp</dimen>
+	<dimen name="_20_">20dp</dimen>
+
+	<dimen name="msv_size_remove_icon">18dp</dimen>
+	<dimen name="padding_16dp">16dp</dimen>
+
+
+	<dimen name="search_height">48dp</dimen>
+	<dimen name="image_padding">12dp</dimen>
+	<dimen name="search_text_size">18sp</dimen>
+
+	<dimen name="seek_bar_thickness">2dp</dimen>
+	<dimen name="seek_bar_thumb_size">12dp</dimen>
+</resources>
