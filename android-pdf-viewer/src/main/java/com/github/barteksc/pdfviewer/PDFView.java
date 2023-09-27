@@ -15,6 +15,9 @@
  */
 package com.github.barteksc.pdfviewer;
 
+import static com.github.barteksc.pdfviewer.util.Constants.Pinch.MAXIMUM_ZOOM;
+import static com.github.barteksc.pdfviewer.util.Constants.Pinch.MINIMUM_ZOOM;
+
 import android.content.Context;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
@@ -62,7 +65,9 @@ import com.github.barteksc.pdfviewer.listener.OnPageChangeListener;
 import com.github.barteksc.pdfviewer.listener.OnPageErrorListener;
 import com.github.barteksc.pdfviewer.listener.OnPageScrollListener;
 import com.github.barteksc.pdfviewer.listener.OnRenderListener;
+import com.github.barteksc.pdfviewer.listener.OnSelectionListener;
 import com.github.barteksc.pdfviewer.listener.OnTapListener;
+import com.github.barteksc.pdfviewer.listener.OnScaleListener;
 import com.github.barteksc.pdfviewer.model.PagePart;
 import com.github.barteksc.pdfviewer.model.SearchRecord;
 import com.github.barteksc.pdfviewer.model.SearchRecordItem;
@@ -120,9 +125,6 @@ public class PDFView extends RelativeLayout {
     private static final String TAG = PDFView.class.getSimpleName();
     final RectF handleLeftPos = new RectF();
     final RectF handleRightPos = new RectF();
-    public static final float DEFAULT_MAX_SCALE = 3.0f;
-    public static final float DEFAULT_MID_SCALE = 1.75f;
-    public static final float DEFAULT_MIN_SCALE = 1.0f;
     boolean hasSelection;
     public boolean isSearching;
     public boolean startInDrag;
@@ -134,24 +136,19 @@ public class PDFView extends RelativeLayout {
     Drawable handleLeft;
     Drawable handleRight;
     Drawable draggingHandle;
-    private float minZoom = DEFAULT_MIN_SCALE;
-    private float midZoom = DEFAULT_MID_SCALE;
-    private float maxZoom = DEFAULT_MAX_SCALE;
+    private float minZoom = MINIMUM_ZOOM;
+    private float midZoom = (MINIMUM_ZOOM+MAXIMUM_ZOOM)/2;
+    private float maxZoom = MAXIMUM_ZOOM;
     private float moveSlop;
     public DisplayMetrics dm;
     private double cos = 1;//Math.cos(0);
     private double sin = 0;//Math.sin(0);
     float drawableScale = 1.f;
-    OnSelection onSelection;
     public final HashMap<Integer, SearchRecord> searchRecords = new HashMap<>();
 
     public void setIsSearching(boolean isSearching) {
         this.isSearching = isSearching;
         redrawSel();
-    }
-
-    public void setOnSelection(OnSelection onSelection) {
-        this.onSelection = onSelection;
     }
 
     public void setMatrixArray(float[] array, float f0, float f1, float f2, float f3, float f4, float f5, float f6, float f7) {
@@ -413,23 +410,14 @@ public class PDFView extends RelativeLayout {
         mResource = getResources();
         dm = mResource.getDisplayMetrics();
         display.getMetrics(dm);
-
-
         initSelection();
-
-
         setWillNotDraw(false);
     }
 
     public void clearSelection() {
-        if (onSelection != null) {
-            onSelection.onSelection(false);
-        }
         dragPinchManager.currentTextPtr = 0;
         hasSelection = false;
-
         redrawSel();
-
     }
 
     public int getScreenWidth() {
@@ -484,7 +472,9 @@ public class PDFView extends RelativeLayout {
         selStart = st;
         selEnd = ed;
         hasSelection = true;
-        selectionPaintView.resetSel();
+        if (selectionPaintView != null) {
+            selectionPaintView.resetSel();
+        }
     }
 
 
@@ -821,7 +811,6 @@ public class PDFView extends RelativeLayout {
         int curPage = pdfFile.getPageAtOffset(isSwipeVertical() ? mappedY : mappedX, getZoom());
         if (page == -1)
             page = curPage;
-        Log.e("page", page + "");
 
         int pageX = (int) pdfFile.getSecondaryPageOffset(page, getZoom());
         int pageY = (int) pdfFile.getPageOffset(page, getZoom());
@@ -1113,7 +1102,7 @@ public class PDFView extends RelativeLayout {
         canvas.translate(-currentXOffset, -currentYOffset);
     }
 
-    public String getSelection() throws Exception {
+    public String getSelection() {
         if (selectionPaintView != null) {
             try {
                 if (hasSelection) {
@@ -1143,48 +1132,9 @@ public class PDFView extends RelativeLayout {
                 }
             } catch (Exception e) {
                 Log.e("get Selection Exception", "Exception", e);
-                throw e;
             }
         }
-        return null;
-    }
-
-   /* public ArrayList<RectF> mergeLineRects(List<RectF> selRects, RectF box) {
-        RectF tmp = new RectF();
-        ArrayList<RectF> selLineRects = new ArrayList<>(selRects.size());
-        RectF currentLineRect = null;
-        for (RectF rI : selRects) {
-            //CMN.Log("RectF rI:selRects", rI);
-            if (currentLineRect != null && Math.abs((currentLineRect.top + currentLineRect.bottom) - (rI.top + rI.bottom)) < currentLineRect.bottom - currentLineRect.top) {
-                currentLineRect.left = Math.min(currentLineRect.left, rI.left);
-                currentLineRect.right = Math.max(currentLineRect.right, rI.right);
-                currentLineRect.top = Math.min(currentLineRect.top, rI.top);
-                currentLineRect.bottom = Math.max(currentLineRect.bottom, rI.bottom);
-            } else {
-                currentLineRect = new RectF();
-                currentLineRect.set(rI);
-                selLineRects.add(currentLineRect);
-                int cid = dragPinchManager.getCharIdxAtPos(rI.left + 1, rI.top + rI.height() / 2);
-                if (cid > 0) {
-                    getCharLoosePos(tmp, cid);
-                    currentLineRect.left = Math.min(currentLineRect.left, tmp.left);
-                    currentLineRect.right = Math.max(currentLineRect.right, tmp.right);
-                    currentLineRect.top = Math.min(currentLineRect.top, tmp.top);
-                    currentLineRect.bottom = Math.max(currentLineRect.bottom, tmp.bottom);
-                }
-            }
-            if (box != null) {
-                box.left = Math.min(box.left, currentLineRect.left);
-                box.right = Math.max(box.right, currentLineRect.right);
-                box.top = Math.min(box.top, currentLineRect.top);
-                box.bottom = Math.max(box.bottom, currentLineRect.bottom);
-            }
-        }
-        return selLineRects;
-    }*/
-
-    public boolean hasSelection() {
-        return hasSelection;
+        return "";
     }
 
     private void drawWithListener(Canvas canvas, int page, OnDrawListener listener) {
@@ -1934,6 +1884,10 @@ public class PDFView extends RelativeLayout {
 
         private OnTapListener onTapListener;
 
+        private OnScaleListener onScaleListener;
+
+        private OnSelectionListener onSelectionListener;
+
         private OnLongPressListener onLongPressListener;
 
         private OnPageErrorListener onPageErrorListener;
@@ -2041,6 +1995,16 @@ public class PDFView extends RelativeLayout {
             return this;
         }
 
+        public Configurator onScale(OnScaleListener onScaleListener) {
+            this.onScaleListener = onScaleListener;
+            return this;
+        }
+
+        public Configurator onSelection(OnSelectionListener onSelectionListener) {
+            this.onSelectionListener = onSelectionListener;
+            return this;
+        }
+
         public Configurator onLongPress(OnLongPressListener onLongPressListener) {
             this.onLongPressListener = onLongPressListener;
             return this;
@@ -2145,6 +2109,8 @@ public class PDFView extends RelativeLayout {
             PDFView.this.callbacks.setOnPageScroll(onPageScrollListener);
             PDFView.this.callbacks.setOnRender(onRenderListener);
             PDFView.this.callbacks.setOnTap(onTapListener);
+            PDFView.this.callbacks.setOnScale(onScaleListener);
+            PDFView.this.callbacks.setOnSelection(onSelectionListener);
             PDFView.this.callbacks.setOnLongPress(onLongPressListener);
             PDFView.this.callbacks.setOnPageError(onPageErrorListener);
             PDFView.this.callbacks.setLinkHandler(linkHandler);
@@ -2173,9 +2139,5 @@ public class PDFView extends RelativeLayout {
                 PDFView.this.load(documentSource, password);
             }
         }
-    }
-
-    public interface OnSelection {
-        void onSelection(boolean hasSelection);
     }
 }

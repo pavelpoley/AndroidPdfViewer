@@ -74,6 +74,16 @@ public class Callbacks {
      */
     private LinkHandler linkHandler;
 
+    /**
+     * Call back to call when user zoom is finished
+     */
+    private OnScaleListener onScaleListener;
+
+    /**
+     * Call back to call when user select some text
+     */
+    private OnSelectionListener onSelectionListener;
+
     public void setOnLoadComplete(OnLoadCompleteListener onLoadCompleteListener) {
         this.onLoadCompleteListener = onLoadCompleteListener;
     }
@@ -175,6 +185,25 @@ public class Callbacks {
     public void callLinkHandler(LinkTapEvent event) {
         if (linkHandler != null) {
             linkHandler.handleLinkEvent(event);
+        }
+    }
+
+    public void setOnScale(OnScaleListener onScaleListener) {
+        this.onScaleListener = onScaleListener;
+    }
+    public void callOnScale(float zoomLevel) {
+        if (onScaleListener != null) {
+            onScaleListener.onScale(zoomLevel);
+        }
+    }
+
+    public void setOnSelection(OnSelectionListener onSelectionListener) {
+        this.onSelectionListener = onSelectionListener;
+    }
+
+    public void callOnSelection(String text) {
+        if (this.onSelectionListener != null) {
+            onSelectionListener.onSelection(text);
         }
     }
 }

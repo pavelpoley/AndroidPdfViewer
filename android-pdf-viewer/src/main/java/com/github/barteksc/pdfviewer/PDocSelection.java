@@ -3,6 +3,7 @@ package com.github.barteksc.pdfviewer;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Path;
@@ -82,9 +83,8 @@ public class PDocSelection extends View {
     private void init() {
         rectPaint = new Paint();
         rectPaint.setColor(0x66109afe);
-        //rectPaint.setColor(0xffffff00);
         rectHighlightPaint = new Paint();
-        rectHighlightPaint.setColor(getResources().getColor(R.color.heightlight_color));
+        rectHighlightPaint.setColor(Color.YELLOW);
         rectPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DARKEN));
         rectHighlightPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DARKEN));
         rectFramePaint = new Paint();
@@ -93,29 +93,11 @@ public class PDocSelection extends View {
         rectFramePaint.setStrokeWidth(0.5f);
     }
 
-
-    private void initMagnifier() {
-        //setLayerType(LAYER_TYPE_NONE,null);
-        cc = new Canvas(PageCache = Bitmap.createBitmap(magW, magH, Bitmap.Config.ARGB_8888));
-        PageCacheDrawable = new BitmapDrawable(getResources(), PageCache);
-        frameDrawable = getResources().getDrawable(R.drawable.frame);
-        framew = getResources().getDimension(R.dimen.framew);
-        magClipper = new Path();
-        magClipperR = new RectF(PageCacheDrawable.getBounds());
-        magClipper.reset();
-        magClipperR.set(0, 0, magW, magH);
-        magClipper.addRoundRect(magClipperR, framew + 5, framew + 5, Path.Direction.CW);
-    }
-
     int rectPoolSize = 0;
 
     ArrayList<ArrayList<RectF>> rectPool = new ArrayList<>();
 
-    ArrayList<RectF> magSelBucket = new ArrayList<>();
-
     public void resetSel() {
-        //  CMN.Log("resetSel", pDocView.selPageSt, pDocView.selPageEd, pDocView.selStart, pDocView.selEnd);
-
         if (pDocView != null && pDocView.pdfFile != null && pDocView.hasSelection) {
             long tid = pDocView.dragPinchManager.loadText();
             if (pDocView.isNotCurrentPage(tid)) {
@@ -168,9 +150,6 @@ public class PDocSelection extends View {
         if (pDocView.isNotCurrentPage(tid)) {
             return;
         }
-        float mappedX = -pDocView.getCurrentXOffset() + pDocView.dragPinchManager.lastX;
-        float mappedY = -pDocView.getCurrentYOffset() + pDocView.dragPinchManager.lastY;
-        int pageIndex = pDocView.pdfFile.getPageAtOffset(pDocView.isSwipeVertical() ? mappedY : mappedX, pDocView.getZoom());
 
         int st = pDocView.selStart;
         int ed = pDocView.selEnd;
@@ -201,8 +180,7 @@ public class PDocSelection extends View {
                     delta = 0;
                     ed += dir;
                 }
-            }//"RectF(373.0, 405.0, 556.0, 434.0)"
-            //CMN.Log("getCharPos", page.allText.substring(ed+delta, ed+delta+1));
+            }
             page.getCharPos(pDocView.handleRightPos, ed + delta);
             pDocView.lineHeightRight = pDocView.handleRightPos.height() / 2;
             page.getCharLoosePos(pDocView.handleRightPos, ed + delta);
@@ -214,6 +192,9 @@ public class PDocSelection extends View {
         if (pDocView == null) {
             return;
         }
+
+        super.onDraw(canvas);
+
         try {
             RectF VR = tmpPosRct;
             Matrix matrix = pDocView.matrix;
@@ -255,20 +236,6 @@ public class PDocSelection extends View {
             }
 
             if (pDocView.hasSelection && pDocView.pdfFile != null) {
-                pDocView.sourceToViewRectFF(pDocView.handleLeftPos, VR);
-                float left = VR.left + drawableDeltaW;
-                pDocView.handleLeft.setBounds((int) (left - drawableWidth), (int) VR.bottom, (int) left, (int) (VR.bottom + drawableHeight));
-                pDocView.handleLeft.draw(canvas);
-                //canvas.drawRect(pDocView.handleLeft.getBounds(), rectPaint);
-
-                pDocView.sourceToViewRectFF(pDocView.handleRightPos, VR);
-                left = VR.right - drawableDeltaW;
-                pDocView.handleRight.setBounds((int) left, (int) VR.bottom, (int) (left + drawableWidth), (int) (VR.bottom + drawableHeight));
-                pDocView.handleRight.draw(canvas);
-
-                // canvas.drawRect(pDocView.handleRight.getBounds(), rectPaint);
-                pDocView.sourceToViewCoord(pDocView.sCursorPos, vCursorPos);
-
                 for (int i = 0; i < rectPoolSize; i++) {
 
                     ArrayList<RectF> rectPage = rectPool.get(i);
@@ -288,8 +255,6 @@ public class PDocSelection extends View {
                         VR.set(0, 0, bmWidth, bmHeight);
                         canvas.drawRect(VR, rectPaint);
                         canvas.restore();
-
-
                     }
                 }
 
