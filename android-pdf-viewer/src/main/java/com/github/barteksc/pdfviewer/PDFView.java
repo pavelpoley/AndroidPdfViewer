@@ -744,20 +744,16 @@ public class PDFView extends RelativeLayout {
 
     public int getPageX(int page) {
         if (isSwipeVertical()) {
-            Log.d("sourceToViewRectFFSearch", "getPageX: "+(int) pdfFile.getSecondaryPageOffset(page, getZoom()));
             return (int) pdfFile.getSecondaryPageOffset(page, getZoom());
         } else {
-            Log.d("sourceToViewRectFFSearch", "getPageX: "+(int) pdfFile.getPageOffset(page, getZoom()));
             return  (int) pdfFile.getPageOffset(page, getZoom());
         }
     }
 
     public int getPageY(int page) {
         if (isSwipeVertical()) {
-            Log.d("sourceToViewRectFFSearch", "getPageY: "+(int) pdfFile.getPageOffset(page, getZoom()));
             return (int) pdfFile.getPageOffset(page, getZoom());
         } else {
-            Log.d("sourceToViewRectFFSearch", "getPageY: "+(int) pdfFile.getSecondaryPageOffset(page, getZoom()));
             return (int) pdfFile.getSecondaryPageOffset(page, getZoom());
         }
     }
@@ -765,7 +761,6 @@ public class PDFView extends RelativeLayout {
     void sourceToViewRectFFSearch(@NonNull RectF sRect, @NonNull RectF vTarget, int page) {
         int pageX = (int) getPageX(page);
         int pageY = (int) getPageY(page);
-        Log.d("sourceToViewRectFFSearch", ""+currentXOffset+"/"+currentYOffset);
         vTarget.set(
                 sRect.left * getZoom() + pageX + currentXOffset,
                 sRect.top * getZoom() + pageY + currentYOffset,
