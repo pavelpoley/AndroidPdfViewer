@@ -209,8 +209,6 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
             }
             selEd -= selSt;
             if (selEd > 0) {
-
-
                 long pagePtr = pdfView.pdfFile.pdfDocument.mNativePagesPtr.get(page);
                 int pageX = pdfView.getPageX(page);
                 int pageY = pdfView.getPageY(page);
@@ -256,7 +254,6 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
         if (pdfView.pdfFile == null) return 0L;
         int page = pdfView.pdfFile.getPageAtOffset(pdfView.isSwipeVertical() ? mappedY : mappedX, pdfView.getZoom());
         return prepareText(page);
-
     }
 
     public long prepareText(int page) {
@@ -293,8 +290,6 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
                     } catch (PageRenderingException e) {
                         e.printStackTrace();
                     }
-
-
                 }
                 long pagePtr = pdfView.pdfFile.pdfDocument.mNativePagesPtr.get(page);//if anyhow, it will produce null pointer exception ...catch statement will return 0 instead of crash
                 if (!pdfView.pdfFile.pdfDocument.hasText(page)) {

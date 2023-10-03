@@ -521,6 +521,15 @@ JNI_FUNC(jstring, PdfiumCore, nativeGetText)(JNI_ARGS, jlong textPtr) {
     delete[]buffer;
     return ret;
 }
+
+JNI_FUNC(jstring, PdfiumCore, nativeGetTextPart)(JNI_ARGS, jlong textPtr, int start, int len) {
+    unsigned short *buffer = new unsigned short[len + 1];
+    FPDFText_GetText((FPDF_TEXTPAGE) textPtr, start, len, buffer);
+    jstring ret = env->NewString(buffer, len);
+    delete[]buffer;
+    return ret;
+}
+
 JNI_FUNC(void, PdfiumCore, nativeRenderPageBitmap)(JNI_ARGS, jlong pagePtr, jobject bitmap,
                                                    jint dpi, jint startX, jint startY,
                                                    jint drawSizeHor, jint drawSizeVer,

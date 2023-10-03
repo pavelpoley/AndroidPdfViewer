@@ -170,7 +170,10 @@ public class PDFView extends RelativeLayout {
         getAllMatchOnPage(schRecord, page);
         ArrayList<SearchRecordItem> data = (ArrayList<SearchRecordItem>) schRecord.data;
         for (int i = 0; i < data.size(); i++) {
-            this.callbacks.callOnSearchMatch();
+            SearchRecordItem item = data.get(i);
+            long textPtr = pdfFile.pdfDocument.mNativeTextPtr.get(page);
+            String searchWord = pdfiumCore.nativeGetTextPart(textPtr, item.st, item.ed);
+            this.callbacks.callOnSearchMatch(page, searchWord);
         }
     }
 

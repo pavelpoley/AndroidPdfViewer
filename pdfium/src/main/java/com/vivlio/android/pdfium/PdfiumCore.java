@@ -80,6 +80,8 @@ public class PdfiumCore {
 
     public native String nativeGetText(long textPtr);
 
+    public native String nativeGetTextPart(long textPtr, int start, int len);
+
     public native int nativeGetCharIndexAtCoord(long pagePtr, double width, double height, long textPtr, double posX, double posY, double tolX, double tolY);
 
     private native void nativeRenderPageBitmap(long docPtr, long pagePtr, Bitmap bitmap, int dpi,
