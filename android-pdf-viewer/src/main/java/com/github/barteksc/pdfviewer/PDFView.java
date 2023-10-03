@@ -167,7 +167,7 @@ public class PDFView extends RelativeLayout {
 
     public void notifyItemAdded(PDocSearchTask pDocSearchTask, ArrayList<SearchRecord> arr, SearchRecord schRecord, int page) {
         searchRecords.put(page, schRecord);
-        getAllMatchOnPage(schRecord);
+        getAllMatchOnPage(schRecord, page);
         ArrayList<SearchRecordItem> data = (ArrayList<SearchRecordItem>) schRecord.data;
         for (int i = 0; i < data.size(); i++) {
             this.callbacks.callOnSearchMatch();
@@ -439,11 +439,6 @@ public class PDFView extends RelativeLayout {
         return ret;
     }
 
-    public void setSearchResults(ArrayList<SearchRecord> arr, String key, int flag) {
-        //  adaptermy.setSearchResults(arr, key, flag);
-        //  currentViewer.selectionPaintView.searchCtx = adaptermy.getSearchProvider();
-    }
-
     int lastSz = 0;
 
     public void closeTask() {
@@ -565,8 +560,7 @@ public class PDFView extends RelativeLayout {
 
     }
 
-    public void getAllMatchOnPage(SearchRecord record) {
-        int page = record.currentPage != -1 ? record.currentPage : currentPage;
+    public void getAllMatchOnPage(SearchRecord record, int page) {
         long tid = dragPinchManager.prepareText(page);
         if (record.data == null && tid != -1) {
             ArrayList<SearchRecordItem> data = new ArrayList<>();
@@ -587,8 +581,6 @@ public class PDFView extends RelativeLayout {
     }
 
     private void getRectsForRecordItem(ArrayList<SearchRecordItem> data, int st, int ed, int page) {
-
-        // int page = currentPage;//pdfFile.getPageAtOffset(isSwipeVertical() ? mappedY : mappedX, getZoom());
         long tid = pdfFile.pdfDocument.mNativeTextPtr.get(page);
         long pid = pdfFile.pdfDocument.mNativePagesPtr.get(page);
         SizeF size = pdfFile.getPageSize(page);
@@ -750,24 +742,41 @@ public class PDFView extends RelativeLayout {
         this.enableSwipe = enableSwipe;
     }
 
-    void sourceToViewRectFFSearch(@NonNull RectF sRect, @NonNull RectF vTarget, int currentPage) {
+    public int getPageX(int page) {
+        if (isSwipeVertical()) {
+            Log.d("sourceToViewRectFFSearch", "getPageX: "+(int) pdfFile.getSecondaryPageOffset(page, getZoom()));
+            return (int) pdfFile.getSecondaryPageOffset(page, getZoom());
+        } else {
+            Log.d("sourceToViewRectFFSearch", "getPageX: "+(int) pdfFile.getPageOffset(page, getZoom()));
+            return  (int) pdfFile.getPageOffset(page, getZoom());
+        }
+    }
 
+    public int getPageY(int page) {
+        if (isSwipeVertical()) {
+            Log.d("sourceToViewRectFFSearch", "getPageY: "+(int) pdfFile.getPageOffset(page, getZoom()));
+            return (int) pdfFile.getPageOffset(page, getZoom());
+        } else {
+            Log.d("sourceToViewRectFFSearch", "getPageY: "+(int) pdfFile.getSecondaryPageOffset(page, getZoom()));
+            return (int) pdfFile.getSecondaryPageOffset(page, getZoom());
+        }
+    }
 
-        int pageX = (int) pdfFile.getSecondaryPageOffset(currentPage, getZoom());
-        int pageY = (int) pdfFile.getPageOffset(currentPage, getZoom());
+    void sourceToViewRectFFSearch(@NonNull RectF sRect, @NonNull RectF vTarget, int page) {
+        int pageX = (int) getPageX(page);
+        int pageY = (int) getPageY(page);
+        Log.d("sourceToViewRectFFSearch", ""+currentXOffset+"/"+currentYOffset);
         vTarget.set(
-                sRect.left * getZoom() + ((pageX)) + currentXOffset,
-                sRect.top * getZoom() + ((pageY)) + currentYOffset,
-                sRect.right * getZoom() + ((pageX)) + currentXOffset,
-                sRect.bottom * getZoom() + ((pageY)) + currentYOffset
+                sRect.left * getZoom() + pageX + currentXOffset,
+                sRect.top * getZoom() + pageY + currentYOffset,
+                sRect.right * getZoom() + pageX + currentXOffset,
+                sRect.bottom * getZoom() + pageY + currentYOffset
         );
     }
 
     void sourceToViewRectFF(@NonNull RectF sRect, @NonNull RectF vTarget) {
         float mappedX = -getCurrentXOffset() + dragPinchManager.lastX;
         float mappedY = -getCurrentYOffset() + dragPinchManager.lastY;
-        // Log.e("dragPinchManager",dragPinchManager.lastX+""+dragPinchManager.lastY);
-        // Log.e("getCurrentYOffset",(-getCurrentYOffset())+""+(-getCurrentXOffset()));
         int page = -1;
         if (pdfFile.pdfDocument != null && pdfFile.pdfDocument.mNativeTextPtr.containsValue(dragPinchManager.currentTextPtr)) {
 
@@ -782,8 +791,8 @@ public class PDFView extends RelativeLayout {
         if (page == -1)
             page = curPage;
 
-        int pageX = (int) pdfFile.getSecondaryPageOffset(page, getZoom());
-        int pageY = (int) pdfFile.getPageOffset(page, getZoom());
+        int pageX = (int) getPageX(currentPage);
+        int pageY = (int) getPageY(currentPage);
         vTarget.set(
                 sRect.left * getZoom() + ((pageX)) + currentXOffset,
                 sRect.top * getZoom() + ((pageY)) + currentYOffset,

@@ -200,32 +200,28 @@ public class PDocSelection extends View {
             Matrix matrix = pDocView.matrix;
 
             if (pDocView.isSearching && pDocView.pdfFile != null) {
-                ArrayList<SearchRecord> searchRecordList = getSearchRecords();
-                for (SearchRecord record : searchRecordList) {
-                    if (record != null) {
-                        pDocView.getAllMatchOnPage(record);
-                        int page = record.currentPage != -1 ? record.currentPage : pDocView.currentPage;
-                        ArrayList<SearchRecordItem> data = (ArrayList<SearchRecordItem>) record.data;
-                        for (int j = 0, len = data.size(); j < len; j++) {
-                            RectF[] rects = data.get(j).rects;
-                            if (rects != null) {
-                                for (RectF rI : rects) {
-                                    pDocView.sourceToViewRectFFSearch(rI, VR, page);
-                                    matrix.reset();
-                                    int bmWidth = (int) rI.width();
-                                    int bmHeight = (int) rI.height();
-                                    pDocView.setMatrixArray(pDocView.srcArray, 0, 0, bmWidth, 0, bmWidth, bmHeight, 0, bmHeight);
-                                    pDocView.setMatrixArray(pDocView.dstArray, VR.left, VR.top, VR.right, VR.top, VR.right, VR.bottom, VR.left, VR.bottom);
 
-                                    matrix.setPolyToPoly(pDocView.srcArray, 0, pDocView.dstArray, 0, 4);
-                                    matrix.postRotate(0, pDocView.getScreenWidth(), pDocView.getScreenHeight());
-
-                                    canvas.save();
-                                    canvas.concat(matrix);
-                                    VR.set(0, 0, bmWidth, bmHeight);
-                                    canvas.drawRect(VR, rectHighlightPaint);
-                                    canvas.restore();
-                                }
+                SearchRecord record = getSearchRecord(pDocView.currentPage);
+                if (record != null) {
+                    pDocView.getAllMatchOnPage(record, record.pageIdx);
+                    ArrayList<SearchRecordItem> data = (ArrayList<SearchRecordItem>) record.data;
+                    for (int j = 0, len = data.size(); j < len; j++) {
+                        RectF[] rects = data.get(j).rects;
+                        if (rects != null) {
+                            for (RectF rI : rects) {
+                                pDocView.sourceToViewRectFFSearch(rI, VR, pDocView.currentPage);
+                                matrix.reset();
+                                int bmWidth = (int) rI.width();
+                                int bmHeight = (int) rI.height();
+                                pDocView.setMatrixArray(pDocView.srcArray, 0, 0, bmWidth, 0, bmWidth, bmHeight, 0, bmHeight);
+                                pDocView.setMatrixArray(pDocView.dstArray, VR.left, VR.top, VR.right, VR.top, VR.right, VR.bottom, VR.left, VR.bottom);
+                                matrix.setPolyToPoly(pDocView.srcArray, 0, pDocView.dstArray, 0, 4);
+                                matrix.postRotate(0, pDocView.getScreenWidth(), pDocView.getScreenHeight());
+                                canvas.save();
+                                canvas.concat(matrix);
+                                VR.set(0, 0, bmWidth, bmHeight);
+                                canvas.drawRect(VR, rectHighlightPaint);
+                                canvas.restore();
                             }
                         }
                     }
@@ -264,18 +260,10 @@ public class PDocSelection extends View {
     /**
      * To draw search result after and before current page
      **/
-    private ArrayList<SearchRecord> getSearchRecords() {
-        ArrayList<SearchRecord> list = new ArrayList<>();
-        for (int i = 0; i < pDocView.getPageCount(); i++) {
-            if (pDocView.searchRecords.containsKey(i)) {
-                SearchRecord searchRecord = pDocView.searchRecords.get(i);
-                if (searchRecord != null) {
-                    list.add(searchRecord);
-                }
-            }
+    private SearchRecord getSearchRecord(int page) {
+        if (pDocView.searchRecords.containsKey(page)) {
+            return pDocView.searchRecords.get(page);
         }
-        return list;
+        return null;
     }
-
-
 }

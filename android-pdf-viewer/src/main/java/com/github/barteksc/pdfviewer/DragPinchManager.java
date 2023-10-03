@@ -91,14 +91,6 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
 
         if (pdfView.hasSelection) {
             pdfView.clearSelection();
-//            if (wordTapped(e.getX(), e.getY(), 1.5f)) {
-//                if (pdfView.onSelection != null) {
-//                    pdfView.onSelection.onSelection(true);
-//                }
-//                draggingHandle = pdfView.handleRight;
-//                sCursorPosStart.set(pdfView.handleRightPos.right, pdfView.handleRightPos.bottom);
-//            } else {
-//            }
         } else {
             onTapHandled = pdfView.callbacks.callOnTap(e);
         }
@@ -141,8 +133,8 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
                 return -1;
             }
             if (tid != 0) {
-                int pageX = (int) pdfFile.getSecondaryPageOffset(page, pdfView.getZoom());
-                int pageY = (int) pdfFile.getPageOffset(page, pdfView.getZoom());
+                int pageX = pdfView.getPageX(page);
+                int pageY = pdfView.getPageY(page);
                 return pdfFile.pdfiumCore.nativeGetCharIndexAtCoord(pagePtr, pageSize.getWidth(), pageSize.getHeight(), tid
                         , Math.abs(mappedX - pageX), Math.abs(mappedY - pageY), 10.0 * tolFactor, 10.0 * tolFactor);
 
@@ -172,9 +164,8 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
                 long tid = prepareText();
                 currentTextPtr = tid;
                 if (tid != 0) {
-                    //int charIdx = pdfiumCore.nativeGetCharIndexAtPos(tid, posX, posY, 10.0, 10.0);
-                    int pageX = (int) pdfFile.getSecondaryPageOffset(page, pdfView.getZoom());
-                    int pageY = (int) pdfFile.getPageOffset(page, pdfView.getZoom());
+                    int pageX = pdfView.getPageX(page);
+                    int pageY = pdfView.getPageY(page);
                     int charIdx = pdfFile.pdfiumCore.nativeGetCharIndexAtCoord(pagePtr, pageSize.getWidth(), pageSize.getHeight(), tid
                             , Math.abs(mappedX - pageX), Math.abs(mappedY - pageY), 10.0 * tolFactor, 10.0 * tolFactor);
 
@@ -190,16 +181,6 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
                     }
                 }
             }
-
-        /*for (PdfDocument.Link link : pdfFile.getPageLinks(page)) {
-            RectF mapped = pdfFile.mapRectToDevice(page, pageX, pageY, (int) pageSize.getWidth(),
-                    (int) pageSize.getHeight(), link.getBounds());
-            mapped.sort();
-            if (mapped.contains(mappedX, mappedY)) {
-                pdfView.callbacks.callLinkHandler(new LinkTapEvent(x, y, mappedX, mappedY, mapped, link));
-                return true;
-            }
-        }*/
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -231,8 +212,8 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
 
 
                 long pagePtr = pdfView.pdfFile.pdfDocument.mNativePagesPtr.get(page);
-                int pageX = (int) pdfView.pdfFile.getSecondaryPageOffset(page, pdfView.getZoom());
-                int pageY = (int) pdfView.pdfFile.getPageOffset(page, pdfView.getZoom());
+                int pageX = pdfView.getPageX(page);
+                int pageY = pdfView.getPageY(page);
                 pdfView.pdfiumCore.getPageSize(pdfView.pdfFile.pdfDocument, page);
                 SizeF size = pdfView.pdfFile.getPageSize(page);
                 int rectCount = pdfView.pdfiumCore.getTextRects(pagePtr
@@ -242,7 +223,6 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
                 if (rectCount >= 0 && rectPagePool.size() > rectCount) {
                     rectPagePool.subList(rectCount, rectPagePool.size()).clear();
                 }
-
             }
         }
     }
@@ -256,14 +236,8 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
         float mappedY = -pdfView.getCurrentYOffset() + y;
         int page = pdfFile.getPageAtOffset(pdfView.isSwipeVertical() ? mappedY : mappedX, pdfView.getZoom());
         SizeF pageSize = pdfFile.getScaledPageSize(page, pdfView.getZoom());
-        int pageX, pageY;
-        if (pdfView.isSwipeVertical()) {
-            pageX = (int) pdfFile.getSecondaryPageOffset(page, pdfView.getZoom());
-            pageY = (int) pdfFile.getPageOffset(page, pdfView.getZoom());
-        } else {
-            pageY = (int) pdfFile.getSecondaryPageOffset(page, pdfView.getZoom());
-            pageX = (int) pdfFile.getPageOffset(page, pdfView.getZoom());
-        }
+        int pageX = pdfView.getPageX(page);
+        int pageY = pdfView.getPageY(page);
         for (PdfDocument.Link link : pdfFile.getPageLinks(page)) {
             RectF mapped = pdfFile.mapRectToDevice(page, pageX, pageY, (int) pageSize.getWidth(),
                     (int) pageSize.getHeight(), link.getBounds());
