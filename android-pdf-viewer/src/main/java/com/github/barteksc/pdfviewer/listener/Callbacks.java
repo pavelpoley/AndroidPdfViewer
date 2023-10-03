@@ -19,6 +19,7 @@ import android.view.MotionEvent;
 
 import com.github.barteksc.pdfviewer.link.LinkHandler;
 import com.github.barteksc.pdfviewer.model.LinkTapEvent;
+import com.github.barteksc.pdfviewer.model.SearchRecord;
 
 public class Callbacks {
 
@@ -83,6 +84,16 @@ public class Callbacks {
      * Call back to call when user select some text
      */
     private OnSelectionListener onSelectionListener;
+
+    /**
+     * Call back to call when user search text
+     */
+    private OnSearchBeginListener onSearchBeginListener;
+
+    private OnSearchMatchListener onSearchMatchListener;
+
+    private OnSearchEndListener onSearchEndListener;
+
 
     public void setOnLoadComplete(OnLoadCompleteListener onLoadCompleteListener) {
         this.onLoadCompleteListener = onLoadCompleteListener;
@@ -202,8 +213,39 @@ public class Callbacks {
     }
 
     public void callOnSelection(String text) {
-        if (this.onSelectionListener != null) {
+        if (onSelectionListener != null) {
             onSelectionListener.onSelection(text);
         }
     }
+
+    public void setOnSearchBegin(OnSearchBeginListener onSearchBeginListener) {
+        this.onSearchBeginListener = onSearchBeginListener;
+    }
+
+    public void callOnSearchBegin() {
+        if (onSearchBeginListener != null) {
+            onSearchBeginListener.onSearchBegin();
+        }
+    }
+
+    public void setOnSearchEnd(OnSearchEndListener onSearchEndListener) {
+        this.onSearchEndListener = onSearchEndListener;
+    }
+
+    public void callOnSearchEnd() {
+        if (onSearchEndListener != null) {
+            onSearchEndListener.onSearchEnd();
+        }
+    }
+
+    public void setOnSearchMatch(OnSearchMatchListener onSearchMatchListener) {
+        this.onSearchMatchListener = onSearchMatchListener;
+    }
+
+    public void callOnSearchMatch() {
+        if (onSearchMatchListener != null) {
+            onSearchMatchListener.onSearchMatch();
+        }
+    }
+
 }

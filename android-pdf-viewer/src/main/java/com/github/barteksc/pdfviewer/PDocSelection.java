@@ -200,9 +200,7 @@ public class PDocSelection extends View {
             Matrix matrix = pDocView.matrix;
 
             if (pDocView.isSearching && pDocView.pdfFile != null) {
-                // SearchRecord record =  pDocView.searchRecords.get(pDocView.getCurrentPage());
                 ArrayList<SearchRecord> searchRecordList = getSearchRecords();
-
                 for (SearchRecord record : searchRecordList) {
                     if (record != null) {
                         pDocView.getAllMatchOnPage(record);
@@ -230,7 +228,6 @@ public class PDocSelection extends View {
                                 }
                             }
                         }
-
                     }
                 }
             }
@@ -269,30 +266,14 @@ public class PDocSelection extends View {
      **/
     private ArrayList<SearchRecord> getSearchRecords() {
         ArrayList<SearchRecord> list = new ArrayList<>();
-        int currentPage = pDocView.getCurrentPage();
-        if (Util.indexExists(pDocView.getPageCount(), currentPage - 1)) {
-            int index = currentPage - 1;
-
-            if (pDocView.searchRecords.containsKey(index)) {
-                SearchRecord searchRecordPrev = pDocView.searchRecords.get(index);
-                if (searchRecordPrev != null)
-                    searchRecordPrev.currentPage = index;
-                list.add(searchRecordPrev);
+        for (int i = 0; i < pDocView.getPageCount(); i++) {
+            if (pDocView.searchRecords.containsKey(i)) {
+                SearchRecord searchRecord = pDocView.searchRecords.get(i);
+                if (searchRecord != null) {
+                    list.add(searchRecord);
+                }
             }
         }
-        list.add(pDocView.searchRecords.get(currentPage));
-
-        if (Util.indexExists(pDocView.getPageCount(), currentPage + 1)) {
-            int indexNext = currentPage + 1;
-            if (pDocView.searchRecords.containsKey(indexNext)) {
-                SearchRecord searchRecordNext = pDocView.searchRecords.get(indexNext);
-                if (searchRecordNext != null)
-                    searchRecordNext.currentPage = indexNext;
-                list.add(pDocView.searchRecords.get(indexNext));
-            }
-        }
-
-
         return list;
     }
 

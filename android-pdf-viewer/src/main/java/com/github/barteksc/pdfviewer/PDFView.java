@@ -66,6 +66,9 @@ import com.github.barteksc.pdfviewer.listener.OnPageErrorListener;
 import com.github.barteksc.pdfviewer.listener.OnPageScrollListener;
 import com.github.barteksc.pdfviewer.listener.OnRenderListener;
 import com.github.barteksc.pdfviewer.listener.OnSelectionListener;
+import com.github.barteksc.pdfviewer.listener.OnSearchBeginListener;
+import com.github.barteksc.pdfviewer.listener.OnSearchEndListener;
+import com.github.barteksc.pdfviewer.listener.OnSearchMatchListener;
 import com.github.barteksc.pdfviewer.listener.OnTapListener;
 import com.github.barteksc.pdfviewer.listener.OnScaleListener;
 import com.github.barteksc.pdfviewer.model.PagePart;
@@ -162,9 +165,13 @@ public class PDFView extends RelativeLayout {
         array[7] = f7;
     }
 
-    public void notifyItemAdded(PDocSearchTask pDocSearchTask, ArrayList<SearchRecord> arr, SearchRecord schRecord, int i) {
-        searchRecords.put(i, schRecord);
-
+    public void notifyItemAdded(PDocSearchTask pDocSearchTask, ArrayList<SearchRecord> arr, SearchRecord schRecord, int page) {
+        searchRecords.put(page, schRecord);
+        getAllMatchOnPage(schRecord);
+        ArrayList<SearchRecordItem> data = (ArrayList<SearchRecordItem>) schRecord.data;
+        for (int i = 0; i < data.size(); i++) {
+            this.callbacks.callOnSearchMatch();
+        }
     }
 
     /**
@@ -457,13 +464,12 @@ public class PDFView extends RelativeLayout {
     }
 
     public void startSearch(ArrayList<SearchRecord> arr, String key, int flag) {
-
+        this.callbacks.callOnSearchBegin();
     }
 
     public void endSearch(ArrayList<SearchRecord> arr) {
-
+        this.callbacks.callOnSearchEnd();
         selectionPaintView.invalidate();
-        // searchHandler.endSearch(arr);
     }
 
     public void setSelectionAtPage(int pageIdx, int st, int ed) {
@@ -563,7 +569,6 @@ public class PDFView extends RelativeLayout {
         int page = record.currentPage != -1 ? record.currentPage : currentPage;
         long tid = dragPinchManager.prepareText(page);
         if (record.data == null && tid != -1) {
-            //CMN.rt();
             ArrayList<SearchRecordItem> data = new ArrayList<>();
             record.data = data;
             long keyStr = task.getKeyStr();
@@ -578,42 +583,7 @@ public class PDFView extends RelativeLayout {
                     pdfiumCore.nativeFindTextPageEnd(searchHandle);
                 }
             }
-            //CMN.pt("getAllSearchedHighlightRects：");
         }
-    }
-
-    public ArrayList<RectF> mergeLineRects(List<RectF> selRects, RectF box) {
-        RectF tmp = new RectF();
-        ArrayList<RectF> selLineRects = new ArrayList<>(selRects.size());
-        RectF currentLineRect = null;
-        for (RectF rI : selRects) {
-            //CMN.Log("RectF rI:selRects", rI);
-            if (currentLineRect != null && Math.abs((currentLineRect.top + currentLineRect.bottom) - (rI.top + rI.bottom)) < currentLineRect.bottom - currentLineRect.top) {
-                currentLineRect.left = Math.min(currentLineRect.left, rI.left);
-                currentLineRect.right = Math.max(currentLineRect.right, rI.right);
-                currentLineRect.top = Math.min(currentLineRect.top, rI.top);
-                currentLineRect.bottom = Math.max(currentLineRect.bottom, rI.bottom);
-            } else {
-                currentLineRect = new RectF();
-                currentLineRect.set(rI);
-                selLineRects.add(currentLineRect);
-                int cid = dragPinchManager.getCharIdxAt(rI.left + 1, rI.top + rI.height() / 2, 10);
-                if (cid > 0) {
-                    getCharLoose(tmp, cid);
-                    currentLineRect.left = Math.min(currentLineRect.left, tmp.left);
-                    currentLineRect.right = Math.max(currentLineRect.right, tmp.right);
-                    currentLineRect.top = Math.min(currentLineRect.top, tmp.top);
-                    currentLineRect.bottom = Math.max(currentLineRect.bottom, tmp.bottom);
-                }
-            }
-            if (box != null) {
-                box.left = Math.min(box.left, currentLineRect.left);
-                box.right = Math.max(box.right, currentLineRect.right);
-                box.top = Math.min(box.top, currentLineRect.top);
-                box.bottom = Math.max(box.bottom, currentLineRect.bottom);
-            }
-        }
-        return selLineRects;
     }
 
     private void getRectsForRecordItem(ArrayList<SearchRecordItem> data, int st, int ed, int page) {
@@ -823,8 +793,6 @@ public class PDFView extends RelativeLayout {
     }
 
     public SearchRecord findPageCached(String key, int pageIdx, int flag) {
-
-
         long tid = dragPinchManager.loadText(pageIdx);
         if (tid == -1) {
             return null;
@@ -1888,6 +1856,12 @@ public class PDFView extends RelativeLayout {
 
         private OnSelectionListener onSelectionListener;
 
+        private OnSearchBeginListener onSearchBeginListener;
+
+        private OnSearchEndListener onSearchEndListener;
+
+        private OnSearchMatchListener onSearchMatchListener;
+
         private OnLongPressListener onLongPressListener;
 
         private OnPageErrorListener onPageErrorListener;
@@ -2005,6 +1979,21 @@ public class PDFView extends RelativeLayout {
             return this;
         }
 
+        public Configurator onSearchBegin(OnSearchBeginListener onSearchBeginListener) {
+            this.onSearchBeginListener = onSearchBeginListener;
+            return this;
+        }
+
+        public Configurator onSearchEnd(OnSearchEndListener onSearchEndListener) {
+            this.onSearchEndListener = onSearchEndListener;
+            return this;
+        }
+
+        public Configurator onSearchMatch(OnSearchMatchListener onSearchMatchListener) {
+            this.onSearchMatchListener = onSearchMatchListener;
+            return this;
+        }
+
         public Configurator onLongPress(OnLongPressListener onLongPressListener) {
             this.onLongPressListener = onLongPressListener;
             return this;
@@ -2111,6 +2100,9 @@ public class PDFView extends RelativeLayout {
             PDFView.this.callbacks.setOnTap(onTapListener);
             PDFView.this.callbacks.setOnScale(onScaleListener);
             PDFView.this.callbacks.setOnSelection(onSelectionListener);
+            PDFView.this.callbacks.setOnSearchBegin(onSearchBeginListener);
+            PDFView.this.callbacks.setOnSearchEnd(onSearchEndListener);
+            PDFView.this.callbacks.setOnSearchMatch(onSearchMatchListener);
             PDFView.this.callbacks.setOnLongPress(onLongPressListener);
             PDFView.this.callbacks.setOnPageError(onPageErrorListener);
             PDFView.this.callbacks.setLinkHandler(linkHandler);
@@ -2120,7 +2112,6 @@ public class PDFView extends RelativeLayout {
             PDFView.this.setDefaultPage(defaultPage);
             PDFView.this.setSwipeVertical(!swipeHorizontal);
             PDFView.this.enableAnnotationRendering(annotationRendering);
-
             PDFView.this.enableAntialiasing(antialiasing);
             PDFView.this.setSpacing(spacing);
             PDFView.this.setSpacingTop(spacingTop);

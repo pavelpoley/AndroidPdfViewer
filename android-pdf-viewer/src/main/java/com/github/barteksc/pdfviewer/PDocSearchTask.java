@@ -2,6 +2,7 @@ package com.github.barteksc.pdfviewer;
 
 
 import com.github.barteksc.pdfviewer.model.SearchRecord;
+import com.github.barteksc.pdfviewer.listener.Callbacks.*;
 import com.vivlio.android.pdfium.PdfiumCore;
 
 import java.lang.ref.WeakReference;
@@ -21,7 +22,6 @@ public class PDocSearchTask implements Runnable {
     private boolean finished;
 
     public PDocSearchTask(PDFView pdoc, String key) {
-
         this.pdoc = new WeakReference<>(pdoc);
         this.key = key + "\0";
     }
@@ -35,34 +35,28 @@ public class PDocSearchTask implements Runnable {
 
     @Override
     public void run() {
-        PDFView a = this.pdoc.get();
-        if (a == null) {
+        PDFView pdfView = this.pdoc.get();
+        if (pdfView == null) {
             return;
         }
         if (finished) {
-            //a.setSearchResults(arr);
-            //a.showT("findAllTest_Time : "+(System.currentTimeMillis()-CMN.ststrt)+" sz="+arr.size());
-            a.endSearch(arr);
+            pdfView.endSearch(arr);
         } else {
-
-
             SearchRecord schRecord;
-            for (int i = 0; i < a.getPageCount(); i++) {
+            for (int i = 0; i < pdfView.getPageCount(); i++) {
                 if (abort.get()) {
                     break;
                 }
-                schRecord =a.findPageCached(key, i, 0);
+                schRecord = pdfView.findPageCached(key, i, 0);
 
                 if (schRecord != null) {
-                    a.notifyItemAdded(this, arr, schRecord, i);
-                } else {
-                  //  a.notifyProgress(i);
+                    pdfView.notifyItemAdded(this, arr, schRecord, i);
                 }
             }
 
             finished = true;
             t = null;
-            a.post(this);
+            pdfView.post(this);
         }
     }
 
@@ -71,9 +65,9 @@ public class PDocSearchTask implements Runnable {
             return;
         }
         if (t == null) {
-            PDFView a = this.pdoc.get();
-            if (a != null) {
-                a.startSearch(arr, key, flag);
+            PDFView pdfView = this.pdoc.get();
+            if (pdfView != null) {
+                pdfView.startSearch(arr, key, flag);
             }
             t = new Thread(this);
             t.start();

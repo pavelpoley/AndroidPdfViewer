@@ -154,37 +154,11 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
         return -1;
     }
 
-    public int getCharIdxAt(float x, float y, int tolFactor) {
-        PdfFile pdfFile = pdfView.pdfFile;
-        if (pdfFile == null) {
-            return -1;
-        }
-        int page = pdfView.currentPage;
-        SizeF pageSize = pdfFile.getPageSize(page);
-
-
-        int pageIndex = pdfFile.documentPage(page);
-        long pagePtr = pdfFile.pdfDocument.mNativePagesPtr.get(pageIndex);
-        long tid = prepareText();
-        if (pdfView.isNotCurrentPage(tid)) {
-            return -1;
-        }
-        if (tid != 0) {
-            //int charIdx = pdfiumCore.nativeGetCharIndexAtPos(tid, posX, posY, 10.0, 10.0);
-            int pageX = (int) pdfFile.getSecondaryPageOffset(page, pdfView.getZoom());
-            int pageY = (int) pdfFile.getPageOffset(page, pdfView.getZoom());
-            return pdfFile.pdfiumCore.nativeGetCharIndexAtCoord(pagePtr, pageSize.getWidth(), pageSize.getHeight(), tid
-                    , x, y, 10.0 * tolFactor, 10.0 * tolFactor);
-        }
-        return -1;
-    }
-
     private boolean wordTapped(float x, float y, float tolFactor) {
         PdfFile pdfFile = pdfView.pdfFile;
         if (pdfFile == null) {
             return false;
         }
-
         try {
             float mappedX = -pdfView.getCurrentXOffset() + x;
             float mappedY = -pdfView.getCurrentYOffset() + y;
@@ -203,13 +177,11 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
                     int pageY = (int) pdfFile.getPageOffset(page, pdfView.getZoom());
                     int charIdx = pdfFile.pdfiumCore.nativeGetCharIndexAtCoord(pagePtr, pageSize.getWidth(), pageSize.getHeight(), tid
                             , Math.abs(mappedX - pageX), Math.abs(mappedY - pageY), 10.0 * tolFactor, 10.0 * tolFactor);
-                    String ret = null;
 
                     if (charIdx >= 0) {
                         int ed = pageBreakIterator.following(charIdx);
                         int st = pageBreakIterator.previous();
                         try {
-                            ret = allText.substring(st, ed);
                             pdfView.setSelectionAtPage(pageIndex, st, ed);
                             return true;
                         } catch (Exception e) {
