@@ -169,6 +169,7 @@ public class PDFView extends RelativeLayout {
         searchRecords.put(page, schRecord);
         getAllMatchOnPage(schRecord, page);
         ArrayList<SearchRecordItem> data = (ArrayList<SearchRecordItem>) schRecord.data;
+        if (pdfFile == null || pdfFile.pdfDocument == null) return;
         for (int i = 0; i < data.size(); i++) {
             SearchRecordItem item = data.get(i);
             long textPtr = pdfFile.pdfDocument.mNativeTextPtr.get(page);
@@ -1100,7 +1101,6 @@ public class PDFView extends RelativeLayout {
                     }
                     sb.ensureCapacity(selCount + 64);
                     for (int i = 0; i <= pageCount; i++) {
-
                         sb.append(dragPinchManager.allText.substring(i == 0 ? selStart : 0, i == pageCount ? selEnd : dragPinchManager.allText.length()));
                     }
                     return sb.toString();

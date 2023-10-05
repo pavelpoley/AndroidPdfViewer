@@ -40,30 +40,12 @@ public class PDocSelection extends View {
     Paint rectHighlightPaint;
 
     /**
-     * Small Canvas for magnifier.
-     * {@link Canvas#clipPath ClipPath} fails if the canvas it too high. ( will never happen in this project. )
-     * see <a href="https://issuetracker.google.com/issues/132402784">issuetracker</a>)
-     */
-    Canvas cc;
-    Bitmap PageCache;
-    BitmapDrawable PageCacheDrawable;
-
-    Path magClipper;
-    RectF magClipperR;
-    float magFactor = 1.5f;
-    int magW = 560;
-    int magH = 280;
-    /**
      * output image
      */
-    Drawable frameDrawable;
-    private float framew;
-    private final PointF vCursorPos = new PointF();
+    private final RectF VR = new RectF();
 
-    private final RectF tmpPosRct = new RectF();
-
-
-    //public PDocPageResultsProvider searchCtx;
+    int rectPoolSize = 0;
+    ArrayList<ArrayList<RectF>> rectPool = new ArrayList<>();
 
     public PDocSelection(Context context) {
         super(context);
@@ -92,10 +74,6 @@ public class PDocSelection extends View {
         rectFramePaint.setStyle(Paint.Style.STROKE);
         rectFramePaint.setStrokeWidth(0.5f);
     }
-
-    int rectPoolSize = 0;
-
-    ArrayList<ArrayList<RectF>> rectPool = new ArrayList<>();
 
     public void resetSel() {
         if (pDocView != null && pDocView.pdfFile != null && pDocView.hasSelection) {
@@ -196,11 +174,9 @@ public class PDocSelection extends View {
         super.onDraw(canvas);
 
         try {
-            RectF VR = tmpPosRct;
             Matrix matrix = pDocView.matrix;
 
             if (pDocView.isSearching && pDocView.pdfFile != null) {
-
                 SearchRecord record = getSearchRecord(pDocView.currentPage);
                 if (record != null) {
                     pDocView.getAllMatchOnPage(record, record.pageIdx);
