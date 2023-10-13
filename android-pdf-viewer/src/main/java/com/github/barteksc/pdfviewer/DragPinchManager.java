@@ -411,8 +411,7 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
             pdfView.hasSelection = true;
             draggingHandle = pdfView.handleRight;
             sCursorPosStart.set(pdfView.handleRightPos.right, pdfView.handleRightPos.bottom);
-
-            pdfView.callbacks.callOnSelection(pdfView.getSelection());
+            pdfView.callbacks.callOnSelection(pdfView.getSelection(), pdfView.selectionPaintView.fullRect(pdfView.currentPage));
         }
         pdfView.callbacks.callOnLongPress(e);
     }
@@ -541,7 +540,6 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
                     draggingHandle = pdfView.handleLeft;
                     sCursorPosStart.set(pdfView.handleLeftPos.left, pdfView.handleLeftPos.bottom);
                 } else if (pdfView.handleRight.getBounds().contains((int) orgX, (int) orgY)) {
-
                     draggingHandle = pdfView.handleRight;
                     sCursorPosStart.set(pdfView.handleRightPos.right, pdfView.handleRightPos.bottom);
                 }
@@ -557,7 +555,6 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
         }
         return true;
     }
-
 
     private void dragHandle(float x, float y) {
         if (draggingHandle != null) {
@@ -595,7 +592,7 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
             }
             pdfView.redrawSel();
             try {
-                pdfView.callbacks.callOnSelection(pdfView.getSelection());
+                pdfView.callbacks.callOnSelection(pdfView.getSelection(), pdfView.selectionPaintView.fullRect(pdfView.currentPage));
             } catch (Exception e) {
             }
             pdfView.selectionPaintView.supressRecalcInval = false;

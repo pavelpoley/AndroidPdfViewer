@@ -74,6 +74,7 @@ import com.github.barteksc.pdfviewer.listener.OnScaleListener;
 import com.github.barteksc.pdfviewer.model.PagePart;
 import com.github.barteksc.pdfviewer.model.SearchRecord;
 import com.github.barteksc.pdfviewer.model.SearchRecordItem;
+import com.github.barteksc.pdfviewer.model.Decoration;
 import com.github.barteksc.pdfviewer.scroll.ScrollHandle;
 import com.github.barteksc.pdfviewer.source.AssetSource;
 import com.github.barteksc.pdfviewer.source.ByteArraySource;
@@ -148,6 +149,8 @@ public class PDFView extends RelativeLayout {
     private double sin = 0;//Math.sin(0);
     float drawableScale = 1.f;
     public final HashMap<Integer, SearchRecord> searchRecords = new HashMap<>();
+
+    public ArrayList<Decoration> decorations = new ArrayList<>();
 
     public void setIsSearching(boolean isSearching) {
         this.isSearching = isSearching;
@@ -452,6 +455,7 @@ public class PDFView extends RelativeLayout {
         task = null;
     }
 
+    // Search methods
     public void search(String text) {
         searchRecords.clear();
         setIsSearching(true);
@@ -469,6 +473,23 @@ public class PDFView extends RelativeLayout {
     public void endSearch(ArrayList<SearchRecord> arr) {
         this.callbacks.callOnSearchEnd();
         selectionPaintView.invalidate();
+    }
+
+    // Decorations methods
+    public void applyDecorations(ArrayList<Decoration> decorations) {
+        this.decorations = decorations;
+        selectionPaintView.invalidate();
+    }
+
+    public ArrayList<RectF> getAllDecorationsOnPage(int page) {
+        ArrayList<RectF> rects = new ArrayList<>();
+        for (int i = 0; i < this.decorations.size(); i++) {
+            Decoration decoration = this.decorations.get(i);
+            if (decoration.page == page) {
+                rects.add(decoration.rect);
+            }
+        }
+        return rects;
     }
 
     public void setSelectionAtPage(int pageIdx, int st, int ed) {
@@ -607,7 +628,6 @@ public class PDFView extends RelativeLayout {
         }
     }
 
-
     public int getLateralOffset() {
         //if(size.getWidth()!=maxPageWidth) {
         //	return (maxPageWidth-size.getWidth())/2;
@@ -683,6 +703,9 @@ public class PDFView extends RelativeLayout {
             return;
         }
 
+        // On page change, clear selection
+        clearSelection();
+
         // Check the page number and makes the
         // difference between UserPages and DocumentPages
         pageNb = pdfFile.determineValidPageNumberFrom(pageNb);
@@ -693,7 +716,6 @@ public class PDFView extends RelativeLayout {
         if (scrollHandle != null && !documentFitsView()) {
             scrollHandle.setPageNum(currentPage + 1);
         }
-
         callbacks.callOnPageChange(currentPage, pdfFile.getPagesCount());
     }
 
@@ -1094,7 +1116,6 @@ public class PDFView extends RelativeLayout {
                     StringBuilder sb = new StringBuilder();
                     int selCount = 0;
                     for (int i = 0; i <= pageCount; i++) {
-
                         dragPinchManager.prepareText();
                         int len = dragPinchManager.allText.length();
                         selCount += i == 0 ? len - selStart : i == pageCount ? selEnd : len;
@@ -1789,6 +1810,9 @@ public class PDFView extends RelativeLayout {
         return pdfFile.getPageLinks(page);
     }
 
+    /****************************************************************
+     *  Configurator  Class                                         *
+     ****************************************************************/
     /**
      * Use an asset file as the pdf source
      */

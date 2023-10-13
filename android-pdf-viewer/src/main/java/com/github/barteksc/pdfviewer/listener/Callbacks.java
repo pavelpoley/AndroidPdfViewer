@@ -15,6 +15,7 @@
  */
 package com.github.barteksc.pdfviewer.listener;
 
+import android.graphics.RectF;
 import android.view.MotionEvent;
 
 import com.github.barteksc.pdfviewer.link.LinkHandler;
@@ -212,9 +213,9 @@ public class Callbacks {
         this.onSelectionListener = onSelectionListener;
     }
 
-    public void callOnSelection(String text) {
+    public void callOnSelection(String text, RectF rect) {
         if (onSelectionListener != null) {
-            onSelectionListener.onSelection(text);
+            onSelectionListener.onSelection(text, rect);
         }
     }
 
