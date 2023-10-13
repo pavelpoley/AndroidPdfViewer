@@ -18,9 +18,9 @@ package com.github.barteksc.pdfviewer;
 import android.os.AsyncTask;
 
 import com.github.barteksc.pdfviewer.source.DocumentSource;
-import com.shockwave.pdfium.PdfDocument;
-import com.shockwave.pdfium.PdfiumCore;
-import com.shockwave.pdfium.util.Size;
+import com.vivlio.android.pdfium.PdfDocument;
+import com.vivlio.android.pdfium.PdfiumCore;
+import com.vivlio.android.pdfium.util.Size;
 
 import java.lang.ref.WeakReference;
 
@@ -53,7 +53,7 @@ class DecodingAsyncTask extends AsyncTask<Void, Void, Throwable> {
                 PdfDocument pdfDocument = docSource.createDocument(pdfView.getContext(), pdfiumCore, password);
                 pdfFile = new PdfFile(pdfiumCore, pdfDocument, pdfView.getPageFitPolicy(), getViewSize(pdfView),
                         userPages, pdfView.isSwipeVertical(), pdfView.getSpacingPx(), pdfView.isAutoSpacingEnabled(),
-                        pdfView.isFitEachPage());
+                        pdfView.isFitEachPage(), pdfView.getSpacingTopPx(), pdfView.getSpacingBottomPx());
                 return null;
             } else {
                 return new NullPointerException("pdfView == null");

@@ -19,8 +19,8 @@ import android.content.Context;
 import android.net.Uri;
 import android.os.ParcelFileDescriptor;
 
-import com.shockwave.pdfium.PdfDocument;
-import com.shockwave.pdfium.PdfiumCore;
+import com.vivlio.android.pdfium.PdfDocument;
+import com.vivlio.android.pdfium.PdfiumCore;
 
 import java.io.IOException;
 

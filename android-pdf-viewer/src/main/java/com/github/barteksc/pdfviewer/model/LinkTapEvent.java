@@ -17,7 +17,7 @@ package com.github.barteksc.pdfviewer.model;
 
 import android.graphics.RectF;
 
-import com.shockwave.pdfium.PdfDocument;
+import com.vivlio.android.pdfium.PdfDocument;
 
 public class LinkTapEvent {
     private float originalX;
