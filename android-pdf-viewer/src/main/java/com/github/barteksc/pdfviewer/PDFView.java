@@ -688,7 +688,12 @@ public class PDFView extends RelativeLayout {
             if (withAnimation) {
                 animationManager.startXAnimation(currentXOffset, offset);
             } else {
-                moveTo(offset, currentYOffset);
+                SnapEdge edge = this.findSnapEdge(page);
+                float xOffset = offset;
+                if(edge == SnapEdge.CENTER) {
+                    xOffset = -this.snapOffsetForPage(page, edge);
+                }
+                moveTo(xOffset, currentYOffset);
             }
         }
         showPage(page);
@@ -958,16 +963,7 @@ public class PDFView extends RelativeLayout {
 
         animationManager.stopAll();
         pdfFile.recalculatePageSizes(new Size(w, h));
-
-        if (swipeVertical) {
-            currentXOffset = -relativeCenterPointInStripXOffset * pdfFile.getMaxPageWidth() + w * 0.5f;
-            currentYOffset = -relativeCenterPointInStripYOffset * pdfFile.getDocLen(zoom) + h * 0.5f;
-        } else {
-            currentXOffset = -relativeCenterPointInStripXOffset * pdfFile.getDocLen(zoom) + w * 0.5f;
-            currentYOffset = -relativeCenterPointInStripYOffset * pdfFile.getMaxPageHeight() + h * 0.5f;
-        }
-        moveTo(currentXOffset, currentYOffset);
-        loadPageByOffset();
+        jumpTo(currentPage);
     }
 
     @Override
