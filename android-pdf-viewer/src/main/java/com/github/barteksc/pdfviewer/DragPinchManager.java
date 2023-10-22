@@ -320,7 +320,9 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
         float offsetY = pdfView.getCurrentYOffset() - delta * pdfView.getZoom();
         int startingPage = pdfView.findFocusPage(offsetX, offsetY);
         int targetPage = Math.max(0, Math.min(pdfView.getPageCount() - 1, startingPage + direction));
-
+        if (pdfView.getDoublePage() && startingPage > 0) {
+            targetPage = Math.max(0, Math.min(pdfView.getPageCount() - 2, startingPage + direction*2));
+        }
         SnapEdge edge = pdfView.findSnapEdge(targetPage);
         float offset = pdfView.snapOffsetForPage(targetPage, edge);
         animationManager.startPageFlingAnimation(-offset);

@@ -152,6 +152,8 @@ public class PDFView extends RelativeLayout {
 
     public ArrayList<Decoration> decorations = new ArrayList<>();
 
+    private boolean doublePage;
+
     public void setIsSearching(boolean isSearching) {
         this.isSearching = isSearching;
         redrawSel();
@@ -1445,6 +1447,10 @@ public class PDFView extends RelativeLayout {
         if (!pageSnap || page < 0) {
             return SnapEdge.NONE;
         }
+        else if (doublePage && page == 0) {
+            return SnapEdge.END;
+        }
+
         float currentOffset = swipeVertical ? currentYOffset : currentXOffset;
         float offset = -pdfFile.getPageOffset(page, zoom);
         int length = swipeVertical ? getHeight() : getWidth();
@@ -1470,10 +1476,30 @@ public class PDFView extends RelativeLayout {
         float length = swipeVertical ? getHeight() : getWidth();
         float pageLength = pdfFile.getPageLength(pageIndex, zoom);
 
-        if (edge == SnapEdge.CENTER) {
-            offset = offset - length / 2f + pageLength / 2f;
-        } else if (edge == SnapEdge.END) {
-            offset = offset - length + pageLength;
+        if (doublePage) {
+            // Double page is always center, but for the first page
+            if (pageIndex == 0) {
+                offset = offset - length + pageLength;
+            }
+            else {
+                float otherPageLength = 0;
+                if (pageIndex % 2 == 0) {
+                    // Right page, so get the previous
+                    otherPageLength = pdfFile.getPageLength(pageIndex-1, zoom);
+                }
+                else {
+                    // Left page, so get the next one
+                    otherPageLength = pdfFile.getPageLength(pageIndex+1, zoom);
+                }
+                offset = offset - length/2f + (pageLength+otherPageLength)/2f;
+            }
+        }
+        else {
+            if (edge == SnapEdge.CENTER) {
+                offset = offset - length / 2f + pageLength / 2f;
+            } else if (edge == SnapEdge.END) {
+                offset = offset - length + pageLength;
+            }
         }
         return offset;
     }
@@ -1764,6 +1790,14 @@ public class PDFView extends RelativeLayout {
         return fitEachPage;
     }
 
+    private void setDoublePage(boolean doublePage) {
+        this.doublePage = doublePage;
+    }
+
+    public boolean getDoublePage() {
+        return this.doublePage;
+    }
+
     public boolean isPageSnap() {
         return pageSnap;
     }
@@ -1915,9 +1949,11 @@ public class PDFView extends RelativeLayout {
 
         private boolean autoSpacing = false;
 
-        private FitPolicy pageFitPolicy = FitPolicy.WIDTH;
+        private FitPolicy pageFitPolicy = FitPolicy.BOTH;
 
         private boolean fitEachPage = false;
+
+        private boolean doublePage = false;
 
         private boolean pageFling = false;
 
@@ -2091,6 +2127,11 @@ public class PDFView extends RelativeLayout {
             return this;
         }
 
+        public Configurator doublePage(boolean doublePage) {
+            this.doublePage = doublePage;
+            return this;
+        }
+
         public Configurator pageSnap(boolean pageSnap) {
             this.pageSnap = pageSnap;
             return this;
@@ -2147,6 +2188,7 @@ public class PDFView extends RelativeLayout {
             PDFView.this.setAutoSpacing(autoSpacing);
             PDFView.this.setPageFitPolicy(pageFitPolicy);
             PDFView.this.setFitEachPage(fitEachPage);
+            PDFView.this.setDoublePage(doublePage);
             PDFView.this.setPageSnap(pageSnap);
             PDFView.this.setPageFling(pageFling);
             PDFView.this.setOnScrollHideView(hideView);
