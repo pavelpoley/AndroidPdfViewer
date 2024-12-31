@@ -15,3 +15,4 @@ dependencyResolutionManagement {
 
 include ':android-pdf-viewer'
 include ':pdfium'
+include ':sample'

@@ -1,4 +1,12 @@
 
+# TODO
+- Add Text Selection option to copy by floating dialog
+- Add Text search highlight current found term as different color and previous or next as different color
+- Add functionality to navigate between found text and highlight accordingly.
+- 
+- 
+
+
 # Looking for new maintainer!
 
 

@@ -4,12 +4,11 @@ plugins {
 
 android {
     namespace 'com.vivlio.android.pdfium'
-    compileSdk 33
+    compileSdk 35
 
     defaultConfig {
         minSdk 23
         targetSdk 33
-	versionName "3.3.1"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles "consumer-rules.pro"
@@ -41,8 +40,7 @@ android {
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.9.0'
-    //noinspection GradleCompatible
-    implementation 'com.android.support:support-v4:25.1.1'
+    implementation 'androidx.legacy:legacy-support-v4:1.0.0'
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
