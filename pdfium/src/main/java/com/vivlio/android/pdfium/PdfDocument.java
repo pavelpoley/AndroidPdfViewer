@@ -112,7 +112,9 @@ public class PdfDocument {
 
     public boolean hasPage(int index) {
         return mNativePagesPtr.containsKey(index);
-    } public boolean hasText(int index) {
+    }
+
+    public boolean hasText(int index) {
         return mNativeTextPtr.containsKey(index);
     }
 }

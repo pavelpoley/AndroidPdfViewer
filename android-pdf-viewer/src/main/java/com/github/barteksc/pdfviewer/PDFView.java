@@ -44,14 +44,13 @@ import android.util.AttributeSet;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.Display;
-import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.RelativeLayout;
-import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.content.res.ResourcesCompat;
 
 import com.github.barteksc.pdfviewer.exception.PageRenderingException;
 import com.github.barteksc.pdfviewer.link.DefaultLinkHandler;
@@ -65,16 +64,16 @@ import com.github.barteksc.pdfviewer.listener.OnPageChangeListener;
 import com.github.barteksc.pdfviewer.listener.OnPageErrorListener;
 import com.github.barteksc.pdfviewer.listener.OnPageScrollListener;
 import com.github.barteksc.pdfviewer.listener.OnRenderListener;
-import com.github.barteksc.pdfviewer.listener.OnSelectionListener;
+import com.github.barteksc.pdfviewer.listener.OnScaleListener;
 import com.github.barteksc.pdfviewer.listener.OnSearchBeginListener;
 import com.github.barteksc.pdfviewer.listener.OnSearchEndListener;
 import com.github.barteksc.pdfviewer.listener.OnSearchMatchListener;
+import com.github.barteksc.pdfviewer.listener.OnSelectionListener;
 import com.github.barteksc.pdfviewer.listener.OnTapListener;
-import com.github.barteksc.pdfviewer.listener.OnScaleListener;
+import com.github.barteksc.pdfviewer.model.Decoration;
 import com.github.barteksc.pdfviewer.model.PagePart;
 import com.github.barteksc.pdfviewer.model.SearchRecord;
 import com.github.barteksc.pdfviewer.model.SearchRecordItem;
-import com.github.barteksc.pdfviewer.model.Decoration;
 import com.github.barteksc.pdfviewer.scroll.ScrollHandle;
 import com.github.barteksc.pdfviewer.source.AssetSource;
 import com.github.barteksc.pdfviewer.source.ByteArraySource;
@@ -141,7 +140,7 @@ public class PDFView extends RelativeLayout {
     Drawable handleRight;
     Drawable draggingHandle;
     private float minZoom = MINIMUM_ZOOM;
-    private float midZoom = (MINIMUM_ZOOM+MAXIMUM_ZOOM)/2;
+    private float midZoom = (MINIMUM_ZOOM + MAXIMUM_ZOOM) / 2;
     private float maxZoom = MAXIMUM_ZOOM;
     private float moveSlop;
     public DisplayMetrics dm;
@@ -194,7 +193,7 @@ public class PDFView extends RelativeLayout {
 
     public void setSelectionPaintView(PDocSelection sv) {
         selectionPaintView = sv;
-        sv.pDocView = this;
+        sv.pdfView = this;
         sv.resetSel();
         sv.drawableWidth = Util.getDP(getContext(), (int) sv.drawableWidth) * drawableScale;
         sv.drawableHeight = Util.getDP(getContext(), (int) sv.drawableHeight) * drawableScale;
@@ -636,9 +635,11 @@ public class PDFView extends RelativeLayout {
     }
 
     void initSelection() {
-        handleLeft = getResources().getDrawable(R.drawable.abc_text_select_handle_left_mtrl_dark);
-        handleRight = getResources().getDrawable(R.drawable.abc_text_select_handle_right_mtrl_dark);
-        ColorFilter colorFilter = new PorterDuffColorFilter(0xaa309afe, PorterDuff.Mode.SRC_IN);
+        handleLeft = ResourcesCompat.getDrawable(getResources(),
+                R.drawable.abc_text_select_handle_left_mtrl_dark, null);
+        handleRight = ResourcesCompat.getDrawable(getResources(),
+                R.drawable.abc_text_select_handle_right_mtrl_dark, null);
+        ColorFilter colorFilter = new PorterDuffColorFilter(0XDD309AfE, PorterDuff.Mode.SRC_IN);
         handleLeft.setColorFilter(colorFilter);
         handleRight.setColorFilter(colorFilter);
         handleLeft.setAlpha(255);
@@ -690,7 +691,7 @@ public class PDFView extends RelativeLayout {
             } else {
                 SnapEdge edge = this.findSnapEdge(page);
                 float xOffset = offset;
-                if(edge == SnapEdge.CENTER) {
+                if (edge == SnapEdge.CENTER) {
                     xOffset = -this.snapOffsetForPage(page, edge);
                 }
                 moveTo(xOffset, currentYOffset);
@@ -709,7 +710,7 @@ public class PDFView extends RelativeLayout {
         }
 
         // On page change, clear selection
-        clearSelection();
+//        clearSelection();
 
         // Check the page number and makes the
         // difference between UserPages and DocumentPages
@@ -777,7 +778,7 @@ public class PDFView extends RelativeLayout {
         if (isSwipeVertical()) {
             return (int) pdfFile.getSecondaryPageOffset(page, getZoom());
         } else {
-            return  (int) pdfFile.getPageOffset(page, getZoom());
+            return (int) pdfFile.getPageOffset(page, getZoom());
         }
     }
 
@@ -804,8 +805,10 @@ public class PDFView extends RelativeLayout {
         float mappedX = -getCurrentXOffset() + dragPinchManager.lastX;
         float mappedY = -getCurrentYOffset() + dragPinchManager.lastY;
         int page = -1;
-        if (pdfFile.pdfDocument != null && pdfFile.pdfDocument.mNativeTextPtr.containsValue(dragPinchManager.currentTextPtr)) {
-
+        if (pdfFile.pdfDocument != null &&
+                pdfFile.pdfDocument.mNativeTextPtr
+                        .containsValue(dragPinchManager.currentTextPtr)
+        ) {
             for (Map.Entry<Integer, Long> entry : pdfFile.pdfDocument.mNativeTextPtr.entrySet()) {
                 Long value = entry.getValue();
                 if (value == dragPinchManager.currentTextPtr) {
@@ -817,8 +820,8 @@ public class PDFView extends RelativeLayout {
         if (page == -1)
             page = curPage;
 
-        int pageX = (int) getPageX(currentPage);
-        int pageY = (int) getPageY(currentPage);
+        int pageX = getPageX(page);
+        int pageY = getPageY(page);
         vTarget.set(
                 sRect.left * getZoom() + ((pageX)) + currentXOffset,
                 sRect.top * getZoom() + ((pageY)) + currentYOffset,
@@ -964,6 +967,10 @@ public class PDFView extends RelativeLayout {
         animationManager.stopAll();
         pdfFile.recalculatePageSizes(new Size(w, h));
         jumpTo(currentPage);
+    }
+
+    public List<SizeF> getPageSizes() {
+        return pdfFile.getPageSizes();
     }
 
     @Override
@@ -1351,7 +1358,7 @@ public class PDFView extends RelativeLayout {
             // Check Y offset
             float scaledPageHeight = toCurrentScale(pdfFile.getMaxPageHeight());
             if (scaledPageHeight < getHeight()) {
-                offsetY = getHeight() / 2 - scaledPageHeight / 2;
+                offsetY = getHeight() / 2f - scaledPageHeight / 2;
             } else {
                 if (offsetY > 0) {
                     offsetY = 0;
@@ -1588,6 +1595,13 @@ public class PDFView extends RelativeLayout {
 
     public float getCurrentYOffset() {
         return currentYOffset;
+    }
+
+    public int getTappedPageIndex(float x, float y) {
+        float mappedX = -getCurrentXOffset() + x;
+        float mappedY = -getCurrentYOffset() + y;
+        int page = pdfFile.getPageAtOffset(isSwipeVertical() ? mappedY : mappedX, getZoom());
+        return pdfFile.documentPage(page);
     }
 
     public float toRealScale(float size) {
