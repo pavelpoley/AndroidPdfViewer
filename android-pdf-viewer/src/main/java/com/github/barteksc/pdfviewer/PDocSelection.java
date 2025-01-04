@@ -5,7 +5,6 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.Paint;
-import android.graphics.Path;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffXfermode;
 import android.graphics.RectF;
@@ -30,16 +29,12 @@ public class PDocSelection extends View {
     float drawableWidth = 60;
     float drawableHeight = 30;
     float drawableDeltaW = drawableWidth / 4;
-    Paint rectPaint;
+    private Paint rectPaint;
     Paint rectFramePaint;
     Paint rectHighlightPaint;
 
-    private final Paint dragPaint = new Paint();
-    private final Path drapPath = new Path();
-    private final RectF dragRectF = new RectF();
-    final RectF startHandleRectF = new RectF();
-    final RectF endHandleRectF = new RectF();
-    final Matrix endMatrix = new Matrix();
+    RectF startHandleRectF;
+    RectF endHandleRectF;
 
     /**
      * output image
@@ -66,13 +61,15 @@ public class PDocSelection extends View {
 
     private void init() {
         rectPaint = new Paint();
-        rectPaint.setColor(0x66109afe);
+        startHandleRectF = new RectF();
+        endHandleRectF = new RectF();
+        rectPaint.setColor(0X66109AFE);
         rectHighlightPaint = new Paint();
         rectHighlightPaint.setColor(Color.YELLOW);
         rectPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DARKEN));
         rectHighlightPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DARKEN));
         rectFramePaint = new Paint();
-        rectFramePaint.setColor(0xccc7ab21);
+        rectFramePaint.setColor(0XCCC7AB21);
         rectFramePaint.setStyle(Paint.Style.STROKE);
         rectFramePaint.setStrokeWidth(0.5f);
     }
@@ -88,8 +85,8 @@ public class PDocSelection extends View {
             if (b1) {
                 pdfView.selPageEd = pdfView.selPageSt;
             }/* else {
-                pDocView.selPageEd = pDocView.selPageEd;
-                pDocView.selPageSt = pDocView.selPageSt;
+                pdfView.selPageEd = pdfView.selPageEd;
+                pdfView.selPageSt = pdfView.selPageSt;
             }*/
             if (b1 || pdfView.selPageEd == pdfView.selPageSt && pdfView.selEnd < pdfView.selStart) {
                 pdfView.selStart = pdfView.selEnd;
@@ -123,6 +120,7 @@ public class PDocSelection extends View {
         }
     }
 
+
     public RectF fullRect(int page) {
         float top = -1.0f, bottom = -1.0f, left = -1.0f, right = -1.0f;
         if (rectPoolSize > 1) return new RectF();
@@ -146,6 +144,52 @@ public class PDocSelection extends View {
         }
         return new RectF(left, top, right, bottom);
     }
+
+    private final RectF fullSelectedRectF = new RectF();
+    private final RectF AR = new RectF();
+
+    public RectF getFullRect() {
+        float left = -1f, top = -1f, right = -1f, bottom = -1f;
+        fullSelectedRectF.set(left, top, right, bottom);
+        if (rectPoolSize > 1) return fullSelectedRectF;
+        for (int i = 0; i < rectPool.size(); i++) {
+            ArrayList<RectF> rectFS = rectPool.get(i);
+            for (int j = 0; j < rectFS.size(); j++) {
+                mapRect(rectFS.get(j), AR);
+                if (j == 0) {
+                    left = AR.left;
+                    top = AR.top;
+                }
+                if (j == rectFS.size() - 1) {
+                    bottom = AR.bottom;
+                }
+                if (AR.left > -1f) {
+                    left = Math.min(AR.left, left);
+                }
+                right = Math.max(right, AR.right);
+            }
+            fullSelectedRectF.set(left, top, right, bottom);
+        }
+        return fullSelectedRectF;
+    }
+
+    private final Matrix m = new Matrix();
+    private final float[] fSrc = new float[8];
+    private final float[] fDes = new float[8];
+
+    private void mapRect(RectF src, RectF dest) {
+        m.reset();
+        pdfView.sourceToViewRectFF(src, dest);
+        int bmWidth = (int) src.width() + 2;
+        int bmHeight = (int) src.height() + 2;
+        pdfView.setMatrixArray(fSrc, 0, 0, bmWidth, 0, bmWidth, bmHeight, 0, bmHeight);
+        pdfView.setMatrixArray(fDes, dest.left, dest.top, dest.right, dest.top, dest.right, dest.bottom, dest.left, dest.bottom);
+        m.setPolyToPoly(fSrc, 0, fDes, 0, 4);
+        m.postRotate(0, pdfView.getScreenWidth(), pdfView.getScreenHeight());
+        dest.set(0, 0, bmWidth, bmHeight);
+        m.mapRect(dest);
+    }
+
 
     public void recalcHandles() {
         PDFView page = pdfView;
@@ -232,7 +276,8 @@ public class PDocSelection extends View {
                 for (int i = 0; i < rectPoolSize; i++) {
                     ArrayList<RectF> rectPage = rectPool.get(i);
 
-                    for (RectF rI : rectPage) {
+                    for (int j = 0, rectPageSize = rectPage.size(); j < rectPageSize; j++) {
+                        RectF rI = rectPage.get(j);
                         pdfView.sourceToViewRectFF(rI, VR);
                         matrix.reset();
                         int bmWidth = (int) rI.width() + 2;
@@ -248,32 +293,28 @@ public class PDocSelection extends View {
                         VR.set(0, 0, bmWidth, bmHeight);
                         canvas.drawRect(VR, rectPaint);
 
-                        if (!rectPage.isEmpty()) {
-                            float handleSize = 88 / pdfView.getZoom();
-                            if (rI == rectPage.get(0)) {
-                                int left = (int) (VR.left - handleSize);
-                                int top = (int) VR.bottom;
-                                int right = (int) VR.left;
-                                int bottom = (int) (VR.bottom + handleSize);
-                                pdfView.handleLeft.setBounds(left, top, right, bottom);
-                                startHandleRectF.set(left, top, right, bottom);
-                                matrix.mapRect(startHandleRectF);
-
-                                pdfView.handleLeft.draw(canvas);
-                            }
-
-                            if (rI == rectPage.get(rectPage.size() - 1)) {
-                                int left = (int) (VR.right);
-                                int top = (int) VR.bottom;
-                                int right = (int) (VR.right + handleSize);
-                                int bottom = (int) (VR.bottom + handleSize);
-                                pdfView.handleRight.setBounds(left, top, right, bottom);
-                                endHandleRectF.set(left, top, right, bottom);
-                                matrix.mapRect(endHandleRectF);
-                                pdfView.handleRight.draw(canvas);
-                            }
+                        //draw start and right drag handle
+                        float handleSize = 88 / pdfView.getZoom();
+                        if (j == 0) {
+                            int left = (int) (VR.left - handleSize);
+                            int top = (int) VR.bottom;
+                            int right = (int) VR.left;
+                            int bottom = (int) (VR.bottom + handleSize);
+                            pdfView.handleLeft.setBounds(left, top, right, bottom);
+                            startHandleRectF.set(left, top, right, bottom);
+                            matrix.mapRect(startHandleRectF);
+                            pdfView.handleLeft.draw(canvas);
                         }
-
+                        if (j == rectPage.size() - 1) {
+                            int left = (int) (VR.right);
+                            int top = (int) VR.bottom;
+                            int right = (int) (VR.right + handleSize);
+                            int bottom = (int) (VR.bottom + handleSize);
+                            pdfView.handleRight.setBounds(left, top, right, bottom);
+                            endHandleRectF.set(left, top, right, bottom);
+                            matrix.mapRect(endHandleRectF);
+                            pdfView.handleRight.draw(canvas);
+                        }
                         canvas.restore();
                     }
                 }
@@ -281,33 +322,6 @@ public class PDocSelection extends View {
 
         } catch (Exception e) {
             Log.e("PDF_TEXT_SELECTION", "onDraw: ", e);
-        }
-    }
-
-    // Method to draw a custom selection handle (similar to text selection)
-    private void drawSelectionHandle(Canvas canvas, float centerX, float centerY, boolean isStart) {
-        dragPaint.setColor(0xAA00FF00);  // Handle color (greenish)
-        dragPaint.setStyle(Paint.Style.FILL);  // Fill the handle
-
-        float handleHeight = centerY * 1.5f;
-        float triangleSize = 80f / pdfView.getZoom();
-
-        if (isStart) {
-            Path path = drapPath;
-            path.reset();
-            path.moveTo(centerX, centerY - handleHeight / 2);  // Top of the handle
-            path.lineTo(centerX - triangleSize / 2, centerY - handleHeight / 2 - triangleSize);  // Left of the triangle
-            path.lineTo(centerX + triangleSize / 2, centerY - handleHeight / 2 - triangleSize);  // Right of the triangle
-            path.close();
-            canvas.drawPath(path, dragPaint);
-        } else {
-            Path path = drapPath;
-            path.reset();
-            path.moveTo(centerX, centerY + handleHeight / 2);  // Bottom of the handle
-            path.lineTo(centerX - triangleSize / 2, centerY + handleHeight / 2 + triangleSize);  // Left of the triangle
-            path.lineTo(centerX + triangleSize / 2, centerY + handleHeight / 2 + triangleSize);  // Right of the triangle
-            path.close();
-            canvas.drawPath(path, dragPaint);
         }
     }
 

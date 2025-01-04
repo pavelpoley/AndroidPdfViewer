@@ -22,6 +22,7 @@ import android.annotation.SuppressLint;
 import android.graphics.PointF;
 import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
+import android.util.Log;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
@@ -44,6 +45,7 @@ import java.util.ArrayList;
  * set its zoom track user actions.
  */
 class DragPinchManager implements GestureDetector.OnGestureListener, GestureDetector.OnDoubleTapListener, ScaleGestureDetector.OnScaleGestureListener, View.OnTouchListener {
+    private static final String TAG = "DragPinchManager";
     float lastX;
     float lastY;
     float orgX;
@@ -85,7 +87,7 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
         enabled = false;
     }
 
-    void disableLongpress() {
+    void disableLongPress() {
         gestureDetector.setIsLongpressEnabled(false);
     }
 
@@ -190,13 +192,13 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
                             pdfView.setSelectionAtPage(pageIndex, st, ed);
                             return true;
                         } catch (Exception e) {
-                            e.printStackTrace();
+                            Log.e(TAG, "wordTapped", e);
                         }
                     }
                 }
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            Log.e(TAG, "wordTapped", e);
         }
         return false;
     }
@@ -274,10 +276,8 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
     }
 
     public long prepareText() {
-        float mappedX = -pdfView.getCurrentXOffset() + lastX;
-        float mappedY = -pdfView.getCurrentYOffset() + lastY;
         if (pdfView.pdfFile == null) return 0L;
-        int page = pdfView.pdfFile.getPageAtOffset(pdfView.isSwipeVertical() ? mappedY : mappedX, pdfView.getZoom());
+        int page = pdfView.getPageNumberAtScreen(lastX, lastY);
         return prepareText(page);
     }
 
@@ -446,8 +446,7 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
             sCursorPosStart.set(pdfView.handleRightPos.right, pdfView.handleRightPos.bottom);
             pdfView.callbacks.callOnSelection(
                     pdfView.getSelection(),
-                    pdfView.selectionPaintView
-                            .fullRect(pdfView.getTappedPageIndex(e.getX(), e.getY()))
+                    pdfView.selectionPaintView.getFullRect()
             );
         }
         pdfView.callbacks.callOnLongPress(e);
@@ -574,11 +573,10 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
             orgX = view_pager_toguard_lastX = lastX;
             orgY = view_pager_toguard_lastY = lastY;
             if (pdfView.hasSelection) {
-                if (paintView.startHandleRectF.contains((int) orgX, (int) orgY)) {
-
+                if (paintView.startHandleRectF.contains(orgX, orgY)) {
                     draggingHandle = pdfView.handleLeft;
                     sCursorPosStart.set(pdfView.handleLeftPos.left, pdfView.handleLeftPos.bottom);
-                } else if (paintView.endHandleRectF.contains((int) orgX, (int) orgY)) {
+                } else if (paintView.endHandleRectF.contains(orgX, orgY)) {
                     draggingHandle = pdfView.handleRight;
                     sCursorPosStart.set(pdfView.handleRightPos.right, pdfView.handleRightPos.bottom);
                 }
@@ -595,6 +593,10 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
 
     private void dragHandle(float x, float y) {
         if (draggingHandle != null) {
+
+
+//            Log.d(TAG, "dragHandle: " + x + ", " + y);
+
             pdfView.startInDrag = true;
             lineHeight = draggingHandle == pdfView.handleLeft ? pdfView.lineHeightLeft : pdfView.lineHeightRight;
             float posX = sCursorPosStart.x + (lastX - orgX) / pdfView.getZoom();
@@ -602,26 +604,21 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
             pdfView.sCursorPos.set(posX, posY);
 
             boolean isLeft = draggingHandle == pdfView.handleLeft;
-            float mappedX = -pdfView.getCurrentXOffset() + x;
-            float mappedY = -pdfView.getCurrentYOffset() + y;
-            int page = pdfView.pdfFile.getPageAtOffset(pdfView.isSwipeVertical() ? mappedY : mappedX, pdfView.getZoom());
+            int page = pdfView.getPageNumberAtScreen(x, y);
             int pageIndex = pdfView.pdfFile.documentPage(page);
-            int charIdx = -1;
-            int pageIdx = pageIndex;
-
-            charIdx = getCharIdxAtPos(x, y - lineHeight, 10);
+            int charIdx = getCharIdxAtPos(x, y - lineHeight, 10);
             pdfView.selectionPaintView.supressRecalcInval = true;
             if (charIdx >= 0) {
                 if (isLeft) {
-                    if (pageIdx != pdfView.selPageSt || charIdx != pdfView.selStart) {
-                        pdfView.selPageSt = pageIdx;
+                    if (pageIndex != pdfView.selPageSt || charIdx != pdfView.selStart) {
+                        pdfView.selPageSt = pageIndex;
                         pdfView.selStart = charIdx;
                         pdfView.selectionPaintView.resetSel();
                     }
                 } else {
                     charIdx += 1;
-                    if (pageIdx != pdfView.selPageEd || charIdx != pdfView.selEnd) {
-                        pdfView.selPageEd = pageIdx;
+                    if (pageIndex != pdfView.selPageEd || charIdx != pdfView.selEnd) {
+                        pdfView.selPageEd = pageIndex;
                         pdfView.selEnd = charIdx;
                         pdfView.selectionPaintView.resetSel();
                     }
@@ -629,8 +626,10 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
             }
             pdfView.redrawSel();
             try {
-                pdfView.callbacks.callOnSelection(pdfView.getSelection(), pdfView.selectionPaintView.fullRect(pdfView.currentPage));
+                pdfView.callbacks.callOnSelection(pdfView.getSelection(),
+                        pdfView.selectionPaintView.getFullRect());
             } catch (Exception e) {
+                Log.e(TAG, "Failed to call onSelection", e);
             }
             pdfView.selectionPaintView.supressRecalcInval = false;
         }

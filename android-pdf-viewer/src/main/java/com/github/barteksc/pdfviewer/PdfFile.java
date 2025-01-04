@@ -124,10 +124,6 @@ class PdfFile {
         setup(viewSize);
     }
 
-    public List<SizeF> getPageSizes() {
-        return pageSizes;
-    }
-
     private void setup(Size viewSize) {
         if (originalUserPages != null) {
             pagesCount = originalUserPages.length;

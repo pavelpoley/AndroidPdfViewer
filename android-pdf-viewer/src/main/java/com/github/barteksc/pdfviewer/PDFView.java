@@ -18,6 +18,7 @@ package com.github.barteksc.pdfviewer;
 import static com.github.barteksc.pdfviewer.util.Constants.Pinch.MAXIMUM_ZOOM;
 import static com.github.barteksc.pdfviewer.util.Constants.Pinch.MINIMUM_ZOOM;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
@@ -99,6 +100,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * It supports animations, zoom, cache, and swipe.
@@ -802,31 +804,30 @@ public class PDFView extends RelativeLayout {
     }
 
     void sourceToViewRectFF(@NonNull RectF sRect, @NonNull RectF vTarget) {
-        float mappedX = -getCurrentXOffset() + dragPinchManager.lastX;
-        float mappedY = -getCurrentYOffset() + dragPinchManager.lastY;
         int page = -1;
-        if (pdfFile.pdfDocument != null &&
-                pdfFile.pdfDocument.mNativeTextPtr
-                        .containsValue(dragPinchManager.currentTextPtr)
-        ) {
-            for (Map.Entry<Integer, Long> entry : pdfFile.pdfDocument.mNativeTextPtr.entrySet()) {
+        if (pdfFile.pdfDocument != null) {
+            Set<Map.Entry<Integer, Long>> entries
+                    = pdfFile.pdfDocument.mNativeTextPtr.entrySet();
+            for (Map.Entry<Integer, Long> entry : entries) {
                 Long value = entry.getValue();
                 if (value == dragPinchManager.currentTextPtr) {
                     page = entry.getKey();
+                    break;
                 }
             }
         }
-        int curPage = pdfFile.getPageAtOffset(isSwipeVertical() ? mappedY : mappedX, getZoom());
-        if (page == -1)
-            page = curPage;
+        page = (page == -1) ? getPageNumberAtScreen(
+                dragPinchManager.lastX,
+                dragPinchManager.lastY
+        ) : page;
 
         int pageX = getPageX(page);
         int pageY = getPageY(page);
         vTarget.set(
-                sRect.left * getZoom() + ((pageX)) + currentXOffset,
-                sRect.top * getZoom() + ((pageY)) + currentYOffset,
-                sRect.right * getZoom() + ((pageX)) + currentXOffset,
-                sRect.bottom * getZoom() + ((pageY)) + currentYOffset
+                sRect.left * getZoom() + pageX + currentXOffset,
+                sRect.top * getZoom() + pageY + currentYOffset,
+                sRect.right * getZoom() + pageX + currentXOffset,
+                sRect.bottom * getZoom() + pageY + currentYOffset
         );
     }
 
@@ -925,6 +926,7 @@ public class PDFView extends RelativeLayout {
         animationManager.computeFling();
     }
 
+    @SuppressLint("ObsoleteSdkInt")
     @Override
     protected void onDetachedFromWindow() {
         recycle();
@@ -969,9 +971,6 @@ public class PDFView extends RelativeLayout {
         jumpTo(currentPage);
     }
 
-    public List<SizeF> getPageSizes() {
-        return pdfFile.getPageSizes();
-    }
 
     @Override
     public boolean canScrollHorizontally(int direction) {
@@ -1597,7 +1596,7 @@ public class PDFView extends RelativeLayout {
         return currentYOffset;
     }
 
-    public int getTappedPageIndex(float x, float y) {
+    public int getPageNumberAtScreen(float x, float y) {
         float mappedX = -getCurrentXOffset() + x;
         float mappedY = -getCurrentYOffset() + y;
         int page = pdfFile.getPageAtOffset(isSwipeVertical() ? mappedY : mappedX, getZoom());
@@ -2121,7 +2120,7 @@ public class PDFView extends RelativeLayout {
         }
 
         public Configurator disableLongpress() {
-            PDFView.this.dragPinchManager.disableLongpress();
+            PDFView.this.dragPinchManager.disableLongPress();
             return this;
         }
 

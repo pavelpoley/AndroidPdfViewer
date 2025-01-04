@@ -1,5 +1,8 @@
 package com.vivlio.android.pdfium.util;
 
+import androidx.annotation.NonNull;
+
+@SuppressWarnings("unused")
 public class SizeF {
     private final float width;
     private final float height;
@@ -32,6 +35,7 @@ public class SizeF {
         return false;
     }
 
+    @NonNull
     @Override
     public String toString() {
         return width + "x" + height;

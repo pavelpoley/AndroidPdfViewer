@@ -59,12 +59,10 @@ public class MainActivity extends AppCompatActivity {
                 .swipeHorizontal(false)
                 .enableDoubletap(true)
                 .defaultPage(0)
+                .onSelection(this::onTextSelected)
                 .spacing(10)
                 .load();
-
-
         pdfView.setSelectionPaintView(binding.docSelection);
-
     }
 
 
@@ -96,10 +94,6 @@ public class MainActivity extends AppCompatActivity {
         startActivity(Intent.createChooser(shareIntent, "Share via"));
     }
 
-    private void highlightText(String text, RectF rectF) {
-        Toast.makeText(this, "Text highlighted: " + text, Toast.LENGTH_SHORT).show();
-    }
-
 
     @Override
     protected void onDestroy() {
@@ -111,7 +105,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void showContextMenuWithPopupWindow(String selectedText, RectF rect) {
         preparePopUpMenu();
-        popupWindow.showAtLocation(binding.pdfView, Gravity.NO_GRAVITY, (int) rect.centerX(), (int) rect.centerY());
+        popupWindow.showAtLocation(binding.pdfView, Gravity.NO_GRAVITY, (int) rect.centerX(), (int) rect.top);
         menuBinding.menuCopy.setOnClickListener(v -> {
             copyTextToClipboard(selectedText);
             popupWindow.dismiss();
@@ -136,5 +130,4 @@ public class MainActivity extends AppCompatActivity {
 
 
     }
-
 }
