@@ -24,6 +24,8 @@ import java.util.ArrayList;
  * A View to paint PDF selections, [magnifier] and search highlights
  */
 public class PDocSelection extends View {
+
+    private static final String TAG = "PDocSelection";
     public boolean supressRecalcInval;
     PDFView pdfView;
     float drawableWidth = 60;
@@ -80,21 +82,6 @@ public class PDocSelection extends View {
             if (pdfView.isNotCurrentPage(tid)) {
                 return;
             }
-
-            boolean b1 = pdfView.selPageEd < pdfView.selPageSt;
-            if (b1) {
-                pdfView.selPageEd = pdfView.selPageSt;
-            }/* else {
-                pdfView.selPageEd = pdfView.selPageEd;
-                pdfView.selPageSt = pdfView.selPageSt;
-            }*/
-            if (b1 || pdfView.selPageEd == pdfView.selPageSt && pdfView.selEnd < pdfView.selStart) {
-                pdfView.selStart = pdfView.selEnd;
-                pdfView.selEnd = pdfView.selStart;
-            } else {
-                pdfView.selStart = pdfView.selStart;
-                pdfView.selEnd = pdfView.selEnd;
-            }
             int pageCount = pdfView.selPageEd - pdfView.selPageSt;
             int sz = rectPool.size();
             ArrayList<RectF> rectPagePool;
@@ -148,7 +135,7 @@ public class PDocSelection extends View {
     private final RectF fullSelectedRectF = new RectF();
     private final RectF AR = new RectF();
 
-    public RectF getFullRect() {
+    public RectF getRectFMappedToScreen() {
         float left = -1f, top = -1f, right = -1f, bottom = -1f;
         fullSelectedRectF.set(left, top, right, bottom);
         if (rectPoolSize > 1) return fullSelectedRectF;
@@ -192,8 +179,7 @@ public class PDocSelection extends View {
 
 
     public void recalcHandles() {
-        PDFView page = pdfView;
-        long tid = page.dragPinchManager.prepareText();
+        long tid = pdfView.dragPinchManager.prepareText();
         if (pdfView.isNotCurrentPage(tid)) {
             return;
         }
@@ -203,7 +189,7 @@ public class PDocSelection extends View {
         int dir = pdfView.selPageEd - pdfView.selPageSt;
         dir = (int) Math.signum(dir == 0 ? ed - st : dir);
         if (dir != 0) {
-            String atext = page.dragPinchManager.allText;
+            String atext = pdfView.dragPinchManager.allText;
             int len = atext.length();
             if (st >= 0 && st < len) {
                 char c;
@@ -211,13 +197,12 @@ public class PDocSelection extends View {
                     st += dir;
                 }
             }
-            page.getCharPos(pdfView.handleLeftPos, st);
+            pdfView.getCharPos(pdfView.handleLeftPos, st);
             pdfView.lineHeightLeft = pdfView.handleLeftPos.height() / 2;
-            page.getCharLoosePos(pdfView.handleLeftPos, st);
+            pdfView.getCharLoosePos(pdfView.handleLeftPos, st);
 
-            page = pdfView;
-            page.dragPinchManager.prepareText();
-            atext = page.dragPinchManager.allText;
+            pdfView.dragPinchManager.prepareText();
+            atext = pdfView.dragPinchManager.allText;
             len = atext.length();
             int delta = -1;
             if (ed >= 0 && ed < len) {
@@ -228,9 +213,9 @@ public class PDocSelection extends View {
                     ed += dir;
                 }
             }
-            page.getCharPos(pdfView.handleRightPos, ed + delta);
+            pdfView.getCharPos(pdfView.handleRightPos, ed + delta);
             pdfView.lineHeightRight = pdfView.handleRightPos.height() / 2;
-            page.getCharLoosePos(pdfView.handleRightPos, ed + delta);
+            pdfView.getCharLoosePos(pdfView.handleRightPos, ed + delta);
         }
     }
 
@@ -275,7 +260,6 @@ public class PDocSelection extends View {
             if (pdfView.hasSelection && pdfView.pdfFile != null) {
                 for (int i = 0; i < rectPoolSize; i++) {
                     ArrayList<RectF> rectPage = rectPool.get(i);
-
                     for (int j = 0, rectPageSize = rectPage.size(); j < rectPageSize; j++) {
                         RectF rI = rectPage.get(j);
                         pdfView.sourceToViewRectFF(rI, VR);
@@ -321,7 +305,7 @@ public class PDocSelection extends View {
             }
 
         } catch (Exception e) {
-            Log.e("PDF_TEXT_SELECTION", "onDraw: ", e);
+            Log.e(TAG, "onDraw: ", e);
         }
     }
 

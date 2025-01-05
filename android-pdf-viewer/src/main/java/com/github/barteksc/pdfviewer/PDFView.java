@@ -1017,7 +1017,7 @@ public class PDFView extends RelativeLayout {
     }
 
     @Override
-    protected void onDraw(Canvas canvas) {
+    protected void onDraw(@NonNull Canvas canvas) {
         if (isInEditMode()) {
             return;
         }

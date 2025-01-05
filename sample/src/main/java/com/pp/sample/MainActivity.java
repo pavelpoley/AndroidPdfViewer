@@ -59,7 +59,6 @@ public class MainActivity extends AppCompatActivity {
                 .swipeHorizontal(false)
                 .enableDoubletap(true)
                 .defaultPage(0)
-                .onSelection(this::onTextSelected)
                 .spacing(10)
                 .load();
         pdfView.setSelectionPaintView(binding.docSelection);
