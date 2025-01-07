@@ -1,28 +1,25 @@
 package com.github.barteksc.pdfviewer;
 
 import android.content.Context;
-import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.Paint;
-import android.graphics.Path;
-import android.graphics.PointF;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffXfermode;
 import android.graphics.RectF;
-import android.graphics.drawable.BitmapDrawable;
-import android.graphics.drawable.Drawable;
+import android.os.Build;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.View;
+import android.widget.Magnifier;
 
-
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.github.barteksc.pdfviewer.model.SearchRecord;
 import com.github.barteksc.pdfviewer.model.SearchRecordItem;
-import com.github.barteksc.pdfviewer.util.Util;
+import com.github.barteksc.pdfviewer.util.Constants;
 
 import java.util.ArrayList;
 
@@ -30,14 +27,22 @@ import java.util.ArrayList;
  * A View to paint PDF selections, [magnifier] and search highlights
  */
 public class PDocSelection extends View {
+
+    private static final String TAG = "PDocSelection";
+    private Magnifier magnifier;
+
+
     public boolean supressRecalcInval;
-    PDFView pDocView;
+    PDFView pdfView;
     float drawableWidth = 60;
     float drawableHeight = 30;
     float drawableDeltaW = drawableWidth / 4;
-    Paint rectPaint;
+    private Paint rectPaint;
     Paint rectFramePaint;
     Paint rectHighlightPaint;
+
+    RectF startHandleRectF;
+    RectF endHandleRectF;
 
     /**
      * output image
@@ -63,41 +68,51 @@ public class PDocSelection extends View {
     }
 
     private void init() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            magnifier = new Magnifier.Builder(this)
+                    .setCornerRadius(50)
+                    .setDefaultSourceToMagnifierOffset(0, -200)
+                    .setInitialZoom(3f)
+                    .build();
+        }
         rectPaint = new Paint();
-        rectPaint.setColor(0x66109afe);
+        startHandleRectF = new RectF();
+        endHandleRectF = new RectF();
+        rectPaint.setColor(0X66109AFE);
         rectHighlightPaint = new Paint();
         rectHighlightPaint.setColor(Color.YELLOW);
         rectPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DARKEN));
         rectHighlightPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DARKEN));
         rectFramePaint = new Paint();
-        rectFramePaint.setColor(0xccc7ab21);
+        rectFramePaint.setColor(0XCCC7AB21);
         rectFramePaint.setStyle(Paint.Style.STROKE);
         rectFramePaint.setStrokeWidth(0.5f);
     }
 
+    private final int[] viewPosition = new int[2];
+
+    void showMagnifier(float x, float y) {
+        if (magnifier == null) return;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            getLocationOnScreen(viewPosition);
+            magnifier.show(x, y - 22);
+        }
+    }
+
+    void dismissMagnifier() {
+        if (magnifier == null) return;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            magnifier.dismiss();
+        }
+    }
+
     public void resetSel() {
-        if (pDocView != null && pDocView.pdfFile != null && pDocView.hasSelection) {
-            long tid = pDocView.dragPinchManager.loadText();
-            if (pDocView.isNotCurrentPage(tid)) {
+        if (pdfView != null && pdfView.pdfFile != null && pdfView.hasSelection) {
+            long tid = pdfView.dragPinchManager.loadText();
+            if (pdfView.isNotCurrentPage(tid)) {
                 return;
             }
-
-            boolean b1 = pDocView.selPageEd < pDocView.selPageSt;
-            if (b1) {
-                pDocView.selPageEd = pDocView.selPageSt;
-                pDocView.selPageSt = pDocView.selPageEd;
-            } else {
-                pDocView.selPageEd = pDocView.selPageEd;
-                pDocView.selPageSt = pDocView.selPageSt;
-            }
-            if (b1 || pDocView.selPageEd == pDocView.selPageSt && pDocView.selEnd < pDocView.selStart) {
-                pDocView.selStart = pDocView.selEnd;
-                pDocView.selEnd = pDocView.selStart;
-            } else {
-                pDocView.selStart = pDocView.selStart;
-                pDocView.selEnd = pDocView.selEnd;
-            }
-            int pageCount = pDocView.selPageEd - pDocView.selPageSt;
+            int pageCount = pdfView.selPageEd - pdfView.selPageSt;
             int sz = rectPool.size();
             ArrayList<RectF> rectPagePool;
             for (int i = 0; i <= pageCount; i++) {
@@ -106,11 +121,11 @@ public class PDocSelection extends View {
                 } else {
                     rectPagePool = rectPool.get(i);
                 }
-                int selSt = i == 0 ? pDocView.selStart : 0;
-                int selEd = i == pageCount ? pDocView.selEnd : -1;
+                int selSt = i == 0 ? pdfView.selStart : 0;
+                int selEd = i == pageCount ? pdfView.selEnd : -1;
                 // PDocument.PDocPage page = pDocView.pdfFile.mPDocPages[selPageSt + i];
 
-                pDocView.dragPinchManager.getSelRects(rectPagePool, selSt, selEd);//+10
+                pdfView.dragPinchManager.getSelRects(rectPagePool, selSt, selEd);//+10
             }
             recalcHandles();
             rectPoolSize = pageCount + 1;
@@ -121,6 +136,7 @@ public class PDocSelection extends View {
             invalidate();
         }
     }
+
 
     public RectF fullRect(int page) {
         float top = -1.0f, bottom = -1.0f, left = -1.0f, right = -1.0f;
@@ -143,22 +159,67 @@ public class PDocSelection extends View {
                 }
             }
         }
-        return new RectF(left, top , right, bottom);
+        return new RectF(left, top, right, bottom);
     }
 
+    private final RectF fullSelectedRectF = new RectF();
+    private final RectF AR = new RectF();
+
+    public RectF getRectFMappedToScreen() {
+        float left = -1f, top = -1f, right = -1f, bottom = -1f;
+        fullSelectedRectF.set(left, top, right, bottom);
+        if (rectPoolSize > 1) return fullSelectedRectF;
+        for (int i = 0; i < rectPool.size(); i++) {
+            ArrayList<RectF> rectFS = rectPool.get(i);
+            for (int j = 0; j < rectFS.size(); j++) {
+                mapRect(rectFS.get(j), AR);
+                if (j == 0) {
+                    left = AR.left;
+                    top = AR.top;
+                }
+                if (j == rectFS.size() - 1) {
+                    bottom = AR.bottom;
+                }
+                if (AR.left > -1f) {
+                    left = Math.min(AR.left, left);
+                }
+                right = Math.max(right, AR.right);
+            }
+            fullSelectedRectF.set(left, top, right, bottom);
+        }
+        return fullSelectedRectF;
+    }
+
+    private final Matrix m = new Matrix();
+    private final float[] fSrc = new float[8];
+    private final float[] fDes = new float[8];
+
+    private void mapRect(RectF src, RectF dest) {
+        m.reset();
+        pdfView.sourceToViewRectFF(src, dest);
+        int bmWidth = (int) src.width() + 2;
+        int bmHeight = (int) src.height() + 2;
+        pdfView.setMatrixArray(fSrc, 0, 0, bmWidth, 0, bmWidth, bmHeight, 0, bmHeight);
+        pdfView.setMatrixArray(fDes, dest.left, dest.top, dest.right, dest.top, dest.right, dest.bottom, dest.left, dest.bottom);
+        m.setPolyToPoly(fSrc, 0, fDes, 0, 4);
+        m.postRotate(0, pdfView.getScreenWidth(), pdfView.getScreenHeight());
+        dest.set(0, 0, bmWidth, bmHeight);
+        m.mapRect(dest);
+    }
+
+
     public void recalcHandles() {
-        PDFView page = pDocView;
-        long tid = page.dragPinchManager.prepareText();
-        if (pDocView.isNotCurrentPage(tid)) {
+        long tid = pdfView.dragPinchManager.prepareText();
+        if (pdfView.isNotCurrentPage(tid)) {
             return;
         }
 
-        int st = pDocView.selStart;
-        int ed = pDocView.selEnd;
-        int dir = pDocView.selPageEd - pDocView.selPageSt;
+        int st = pdfView.selStart;
+        int ed = pdfView.selEnd;
+        int dir = pdfView.selPageEd - pdfView.selPageSt;
         dir = (int) Math.signum(dir == 0 ? ed - st : dir);
         if (dir != 0) {
-            String atext = page.dragPinchManager.allText;
+            String atext = pdfView.dragPinchManager.allText;
             int len = atext.length();
             if (st >= 0 && st < len) {
                 char c;
@@ -166,13 +227,12 @@ public class PDocSelection extends View {
                     st += dir;
                 }
             }
-            page.getCharPos(pDocView.handleLeftPos, st);
-            pDocView.lineHeightLeft = pDocView.handleLeftPos.height() / 2;
-            page.getCharLoosePos(pDocView.handleLeftPos, st);
+            pdfView.getCharPos(pdfView.handleLeftPos, st);
+            pdfView.lineHeightStart = pdfView.handleLeftPos.height() / 2;
+            pdfView.getCharLoosePos(pdfView.handleLeftPos, st);
 
-            page = pDocView;
-            page.dragPinchManager.prepareText();
-            atext = page.dragPinchManager.allText;
+            pdfView.dragPinchManager.prepareText();
+            atext = pdfView.dragPinchManager.allText;
             len = atext.length();
             int delta = -1;
             if (ed >= 0 && ed < len) {
@@ -183,40 +243,38 @@ public class PDocSelection extends View {
                     ed += dir;
                 }
             }
-            page.getCharPos(pDocView.handleRightPos, ed + delta);
-            pDocView.lineHeightRight = pDocView.handleRightPos.height() / 2;
-            page.getCharLoosePos(pDocView.handleRightPos, ed + delta);
+            pdfView.getCharPos(pdfView.handleRightPos, ed + delta);
+            pdfView.lineHeightEnd = pdfView.handleRightPos.height() / 2;
+            pdfView.getCharLoosePos(pdfView.handleRightPos, ed + delta);
         }
     }
 
+    @SuppressWarnings("unchecked")
     @Override
-    protected void onDraw(Canvas canvas) {
-        if (pDocView == null) {
+    protected void onDraw(@NonNull Canvas canvas) {
+        if (pdfView == null) {
             return;
         }
-
         super.onDraw(canvas);
-
         try {
-            Matrix matrix = pDocView.matrix;
-
-            if (pDocView.isSearching && pDocView.pdfFile != null) {
-                SearchRecord record = getSearchRecord(pDocView.currentPage);
+            Matrix matrix = pdfView.matrix;
+            if (pdfView.isSearching && pdfView.pdfFile != null) {
+                SearchRecord record = getSearchRecord(pdfView.currentPage);
                 if (record != null) {
-                    pDocView.getAllMatchOnPage(record, record.pageIdx);
+                    pdfView.getAllMatchOnPage(record, record.pageIdx);
                     ArrayList<SearchRecordItem> data = (ArrayList<SearchRecordItem>) record.data;
                     for (int j = 0, len = data.size(); j < len; j++) {
                         RectF[] rects = data.get(j).rects;
                         if (rects != null) {
                             for (RectF rI : rects) {
-                                pDocView.sourceToViewRectFFSearch(rI, VR, pDocView.currentPage);
+                                pdfView.sourceToViewRectFFSearch(rI, VR, pdfView.currentPage);
                                 matrix.reset();
                                 int bmWidth = (int) rI.width() + 2;
                                 int bmHeight = (int) rI.height() + 2;
-                                pDocView.setMatrixArray(pDocView.srcArray, 0, 0, bmWidth, 0, bmWidth, bmHeight, 0, bmHeight);
-                                pDocView.setMatrixArray(pDocView.dstArray, VR.left, VR.top, VR.right, VR.top, VR.right, VR.bottom, VR.left, VR.bottom);
-                                matrix.setPolyToPoly(pDocView.srcArray, 0, pDocView.dstArray, 0, 4);
-                                matrix.postRotate(0, pDocView.getScreenWidth(), pDocView.getScreenHeight());
+                                pdfView.setMatrixArray(pdfView.srcArray, 0, 0, bmWidth, 0, bmWidth, bmHeight, 0, bmHeight);
+                                pdfView.setMatrixArray(pdfView.dstArray, VR.left, VR.top, VR.right, VR.top, VR.right, VR.bottom, VR.left, VR.bottom);
+                                matrix.setPolyToPoly(pdfView.srcArray, 0, pdfView.dstArray, 0, 4);
+                                matrix.postRotate(0, pdfView.getScreenWidth(), pdfView.getScreenHeight());
                                 canvas.save();
                                 canvas.concat(matrix);
                                 VR.set(0, 0, bmWidth, bmHeight);
@@ -227,59 +285,64 @@ public class PDocSelection extends View {
                     }
                 }
             }
-
-            if (pDocView.hasSelection && pDocView.pdfFile != null) {
+            if (pdfView.hasSelection && pdfView.pdfFile != null) {
                 for (int i = 0; i < rectPoolSize; i++) {
                     ArrayList<RectF> rectPage = rectPool.get(i);
-                    for (RectF rI : rectPage) {
-                        pDocView.sourceToViewRectFF(rI, VR);
+                    for (int j = 0, rectPageSize = rectPage.size(); j < rectPageSize; j++) {
+                        RectF rI = rectPage.get(j);
+                        pdfView.sourceToViewRectFF(rI, VR);
                         matrix.reset();
                         int bmWidth = (int) rI.width() + 2;
                         int bmHeight = (int) rI.height() + 2;
-                        pDocView.setMatrixArray(pDocView.srcArray, 0, 0, bmWidth, 0, bmWidth, bmHeight, 0, bmHeight);
-                        pDocView.setMatrixArray(pDocView.dstArray, VR.left, VR.top, VR.right, VR.top, VR.right, VR.bottom, VR.left, VR.bottom);
+                        pdfView.setMatrixArray(pdfView.srcArray, 0, 0, bmWidth, 0, bmWidth, bmHeight, 0, bmHeight);
+                        pdfView.setMatrixArray(pdfView.dstArray, VR.left, VR.top, VR.right, VR.top, VR.right, VR.bottom, VR.left, VR.bottom);
 
-                        matrix.setPolyToPoly(pDocView.srcArray, 0, pDocView.dstArray, 0, 4);
-                        matrix.postRotate(0, pDocView.getScreenWidth(), pDocView.getScreenHeight());
+                        matrix.setPolyToPoly(pdfView.srcArray, 0, pdfView.dstArray, 0, 4);
+                        matrix.postRotate(0, pdfView.getScreenWidth(), pdfView.getScreenHeight());
 
                         canvas.save();
                         canvas.concat(matrix);
                         VR.set(0, 0, bmWidth, bmHeight);
                         canvas.drawRect(VR, rectPaint);
+
+                        //draw start and right drag handle
+                        float handleSize = 88 / pdfView.getZoom();
+                        if (j == 0) {
+                            int left = (int) (VR.left - handleSize);
+                            int top = (int) VR.bottom;
+                            int right = (int) VR.left;
+                            int bottom = (int) (VR.bottom + handleSize);
+                            pdfView.startSelectionHandle.setBounds(left, top, right, bottom);
+                            startHandleRectF.set(left, top, right, bottom);
+                            matrix.mapRect(startHandleRectF);
+                            pdfView.startSelectionHandle.draw(canvas);
+                        }
+                        if (j == rectPage.size() - 1) {
+                            int left = (int) (VR.right);
+                            int top = (int) VR.bottom;
+                            int right = (int) (VR.right + handleSize);
+                            int bottom = (int) (VR.bottom + handleSize);
+                            pdfView.endSelectionHandle.setBounds(left, top, right, bottom);
+                            endHandleRectF.set(left, top, right, bottom);
+                            matrix.mapRect(endHandleRectF);
+                            pdfView.endSelectionHandle.draw(canvas);
+                        }
                         canvas.restore();
                     }
                 }
             }
-            if (pDocView.pdfFile != null) {
-                ArrayList<RectF> decorations = pDocView.getAllDecorationsOnPage(pDocView.currentPage);
-                for (int i = 0; i < decorations.size(); i++) {
-                    RectF rect = decorations.get(i);
-                    pDocView.sourceToViewRectFFSearch(rect, VR, pDocView.currentPage);
-                    matrix.reset();
-                    int bmWidth = (int) rect.width() + 2;
-                    int bmHeight = (int) rect.height() + 2;
-                    pDocView.setMatrixArray(pDocView.srcArray, 0, 0, bmWidth, 0, bmWidth, bmHeight, 0, bmHeight);
-                    pDocView.setMatrixArray(pDocView.dstArray, VR.left, VR.top, VR.right, VR.top, VR.right, VR.bottom, VR.left, VR.bottom);
-                    matrix.setPolyToPoly(pDocView.srcArray, 0, pDocView.dstArray, 0, 4);
-                    matrix.postRotate(0, pDocView.getScreenWidth(), pDocView.getScreenHeight());
-                    canvas.save();
-                    canvas.concat(matrix);
-                    VR.set(0, 0, bmWidth, bmHeight);
-                    canvas.drawRect(VR, rectHighlightPaint);
-                    canvas.restore();
-                }
-            }
         } catch (Exception e) {
-            Log.e("PDF_TEXT_SELECTION", "onDraw: ", e);
+            Log.e(TAG, "onDraw: ", e);
         }
     }
+
 
     /**
      * To draw search result after and before current page
      **/
     private SearchRecord getSearchRecord(int page) {
-        if (pDocView.searchRecords.containsKey(page)) {
-            return pDocView.searchRecords.get(page);
+        if (pdfView.searchRecords.containsKey(page)) {
+            return pdfView.searchRecords.get(page);
         }
         return null;
     }

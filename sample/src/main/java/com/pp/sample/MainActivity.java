@@ -9,7 +9,6 @@ import android.graphics.RectF;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
 import android.view.WindowManager;
@@ -18,12 +17,12 @@ import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.appcompat.widget.PopupMenu;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
 import com.github.barteksc.pdfviewer.PDFView;
+import com.github.barteksc.pdfviewer.scroll.DefaultScrollHandle;
 import com.pp.sample.databinding.ActivityMainBinding;
 import com.pp.sample.databinding.LayoutMenuPopupTextSelectionBinding;
 
@@ -32,12 +31,15 @@ public class MainActivity extends AppCompatActivity {
     private static final String TAG = "MainActivity";
     private ActivityMainBinding binding;
 
-    private static final long DEBOUNCE_DELAY_MS = 300; // Delay in milliseconds
+    private static final long DEBOUNCE_DELAY_MS = 500; // Delay in milliseconds
     private final Handler debounceHandler = new Handler(Looper.getMainLooper());
     private Runnable debounceRunnable;
 
     private PopupWindow popupWindow;
+    private LayoutMenuPopupTextSelectionBinding menuBinding;
 
+
+    @SuppressLint("NewApi")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -52,61 +54,40 @@ public class MainActivity extends AppCompatActivity {
 
         PDFView pdfView = binding.pdfView;
         pdfView.fromAsset("sample.pdf")
+                .scrollHandle(new DefaultScrollHandle(this))
                 .enableSwipe(true)
                 .swipeHorizontal(false)
                 .enableDoubletap(true)
                 .defaultPage(0)
+                .swipeHorizontal(false)
+                .onPageScroll((page, positionOffset) -> hidePopupMenu())
+                .spacing(10)
                 .onSelection(this::onTextSelected)
+                .onSelectionInProgress(this::hidePopupMenu)
                 .onTap(e -> {
-                    dismissMenu();
+                    hidePopupMenu();
                     return true;
                 })
                 .load();
 
         pdfView.setSelectionPaintView(binding.docSelection);
-
     }
 
 
     private void onTextSelected(String selectedText, RectF selectionRect) {
+        hidePopupMenu();
         if (debounceRunnable != null) {
             debounceHandler.removeCallbacks(debounceRunnable);
         }
 
         debounceRunnable = () -> {
-            if (selectedText != null && !selectedText.isEmpty()) {
+            if (selectedText != null && !selectedText.isBlank() && binding.pdfView.getHasSelection()) {
                 showContextMenuWithPopupWindow(selectedText, selectionRect);
             }
         };
 
         debounceHandler.postDelayed(debounceRunnable, DEBOUNCE_DELAY_MS);
     }
-
-
-    @SuppressLint({"NonConstantResourceId", "ClickableViewAccessibility"})
-    private void showContextMenu(String selectedText, RectF rect) {
-
-
-        Log.d(TAG, "showContextMenu: " + rect.toShortString());
-
-        PopupMenu popupMenu = new PopupMenu(this, binding.docSelection);
-        popupMenu.inflate(R.menu.menu_text_selection_popup);
-
-        popupMenu.setOnMenuItemClickListener(item -> {
-            switch (item.getItemId()) {
-                case R.id.menu_copy:
-                    copyTextToClipboard(selectedText);
-                    return true;
-                case R.id.menu_share:
-                    shareText(selectedText);
-                    return true;
-                default:
-                    return false;
-            }
-        });
-        popupMenu.show();
-    }
-
 
     private void copyTextToClipboard(String text) {
         ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
@@ -122,48 +103,47 @@ public class MainActivity extends AppCompatActivity {
         startActivity(Intent.createChooser(shareIntent, "Share via"));
     }
 
-    private void highlightText(String text, RectF rectF) {
-        Toast.makeText(this, "Text highlighted: " + text, Toast.LENGTH_SHORT).show();
-    }
 
     @Override
     protected void onDestroy() {
         binding = null;
+        menuBinding = null;
         super.onDestroy();
     }
 
 
-    private void showContextMenuWithPopupWindow(String selectedText, RectF rect) {
-        Log.d(TAG, "showContextMenuWithPopupWindow: " + rect);
-        dismissMenu();
-
-        // Create the PopupWindow
-        var menuBinding =
-                LayoutMenuPopupTextSelectionBinding.inflate(getLayoutInflater(),
-                        null, false);
-        View popupView = menuBinding
-                .getRoot();
-        popupWindow = new PopupWindow(popupView,
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                WindowManager.LayoutParams.WRAP_CONTENT);
-
-
-        popupWindow.showAtLocation(binding.pdfView, Gravity.NO_GRAVITY, (int) rect.centerX(), (int) rect.centerY());
+    private void showContextMenuWithPopupWindow(final String selectedText, final RectF rect) {
+        preparePopUpMenu();
+        if (!binding.pdfView.getHasSelection()) return;
+        popupWindow.showAtLocation(binding.pdfView, Gravity.NO_GRAVITY, (int) rect.centerX() - menuBinding.getRoot().getWidth() / 2, (int) rect.top);
         menuBinding.menuCopy.setOnClickListener(v -> {
+            binding.pdfView.clearSelection();
             copyTextToClipboard(selectedText);
-            dismissMenu();
+            popupWindow.dismiss();
         });
         menuBinding.menuShare.setOnClickListener(v -> {
+            binding.pdfView.clearSelection();
             shareText(selectedText);
-            dismissMenu();
+            popupWindow.dismiss();
         });
     }
 
-    private void dismissMenu() {
-        if (popupWindow != null && popupWindow.isShowing()) {
-            popupWindow.dismiss();
-            popupWindow = null;
+    private void preparePopUpMenu() {
+        hidePopupMenu();
+        if (popupWindow == null) {
+            menuBinding = LayoutMenuPopupTextSelectionBinding.inflate(getLayoutInflater(), null, false);
+            View popupView = menuBinding.getRoot();
+            popupWindow = new PopupWindow(popupView,
+                    WindowManager.LayoutParams.WRAP_CONTENT,
+                    WindowManager.LayoutParams.WRAP_CONTENT);
         }
+
+
     }
 
+    private void hidePopupMenu() {
+        if (popupWindow != null && popupWindow.isShowing()) {
+            popupWindow.dismiss();
+        }
+    }
 }

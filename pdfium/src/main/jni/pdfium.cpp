@@ -826,17 +826,19 @@ JNI_FUNC(jboolean, PdfiumCore, nativeGetMixedLooseCharPos)(JNI_ARGS, jlong pageP
     top = fmax(res.top, top);
     bottom = fmin(res.bottom, bottom);
     left = fmin(res.left, left);
-    right = fmax(res.right, right);//width=1080,height=1527,left=365,top=621,right=686,bottom=440,deviceX=663,deviceY=400,ptr=543663849984
+    right = fmax(res.right,
+                 right);//width=1080,height=1527,left=365,top=621,right=686,bottom=440,deviceX=663,deviceY=400,ptr=543663849984
     int deviceX, deviceY;
     FPDF_PageToDevice((FPDF_PAGE) pagePtr, 0, 0, width, height, 0, left, top, &deviceX, &deviceY);
 
-   /* width = right - left;
-    height = top - bottom;*/
+    /* width = right - left;
+     height = top - bottom;*/
     height = top - bottom;
     top = deviceY + offsetY;
     left = deviceX + offsetX;
 
-    FPDF_PageToDevice((FPDF_PAGE) pagePtr, 0, 0, width, height, 0, right, bottom, &deviceX, &deviceY);
+    FPDF_PageToDevice((FPDF_PAGE) pagePtr, 0, 0, width, height, 0, right, bottom, &deviceX,
+                      &deviceY);
 
     width = deviceX - left;
 
@@ -869,18 +871,20 @@ JNI_FUNC(jint, PdfiumCore, nativeCountAndGetRects)(JNI_ARGS, jlong pagePtr, jint
     int deviceRight, deviceBottom;
     for (int i = 0; i < rectCount; i++) {//"RectF(373.0, 405.0, 556.0, 434.0)"
         if (FPDFText_GetRect((FPDF_TEXTPAGE) textPtr, i, &left, &top, &right, &bottom)) {
-            FPDF_PageToDevice((FPDF_PAGE) pagePtr, 0, 0, (int)width, (int)height, 0, left, top, &deviceX,
+            FPDF_PageToDevice((FPDF_PAGE) pagePtr, 0, 0, (int) width, (int) height, 0, left, top,
+                              &deviceX,
                               &deviceY);
 
-            FPDF_PageToDevice((FPDF_PAGE) pagePtr, 0, 0, (int)width, (int)height, 0, right, bottom, &deviceRight,
+            FPDF_PageToDevice((FPDF_PAGE) pagePtr, 0, 0, (int) width, (int) height, 0, right,
+                              bottom, &deviceRight,
                               &deviceBottom);
             /*int new_width = right - left;
             int new_height = top - bottom;*/
             left = deviceX + offsetX;
             top = deviceY + offsetY;
 
-          int  new_width =deviceRight - left;
-          int   new_height =deviceBottom - top;
+            int new_width = deviceRight - left;
+            int new_height = deviceBottom - top;
 
             right = left + new_width;
             bottom = top + new_height;
@@ -914,61 +918,66 @@ JNI_FUNC(jobject, PdfiumCore, nativeGetLinkRect)(JNI_ARGS, jlong linkPtr) {
                           fsRectF.bottom);
 }
 JNI_FUNC(jint, PdfiumCore, nativeGetFindIdx)(JNI_ARGS, jlong searchPtr) {
-    return FPDFText_GetSchResultIndex((FPDF_SCHHANDLE)searchPtr);
+    return FPDFText_GetSchResultIndex((FPDF_SCHHANDLE) searchPtr);
 }
 JNI_FUNC(jint, PdfiumCore, nativeCountRects)(JNI_ARGS, jlong textPtr, jint st, jint ed) {
-    return FPDFText_CountRects((FPDF_TEXTPAGE)textPtr, st, ed);
+    return FPDFText_CountRects((FPDF_TEXTPAGE) textPtr, st, ed);
 }
 
-JNI_FUNC(jboolean, PdfiumCore, nativeGetRect)(JNI_ARGS, jlong pagePtr, jint offsetY, jint offsetX, jint width, jint height, jlong textPtr, jobject rect, jint idx) {
-    if(init_classes) initClasses(env);
+JNI_FUNC(jboolean, PdfiumCore, nativeGetRect)(JNI_ARGS, jlong pagePtr, jint offsetY, jint offsetX,
+                                              jint width, jint height, jlong textPtr, jobject rect,
+                                              jint idx) {
+    if (init_classes) initClasses(env);
     double left, top, right, bottom;
 
 
-    bool ret = FPDFText_GetRect((FPDF_TEXTPAGE)textPtr, idx, &left, &top, &right, &bottom);
-    if(ret) {
+    bool ret = FPDFText_GetRect((FPDF_TEXTPAGE) textPtr, idx, &left, &top, &right, &bottom);
+    if (ret) {
         int deviceX, deviceY;
         int deviceRight, deviceBottom;
-        FPDF_PageToDevice((FPDF_PAGE)pagePtr, 0, 0, width, height, 0, left, top, &deviceX, &deviceY);
-        FPDF_PageToDevice((FPDF_PAGE) pagePtr, 0, 0, (int)width, (int)height, 0, right, bottom, &deviceRight,
+        FPDF_PageToDevice((FPDF_PAGE) pagePtr, 0, 0, width, height, 0, left, top, &deviceX,
+                          &deviceY);
+        FPDF_PageToDevice((FPDF_PAGE) pagePtr, 0, 0, (int) width, (int) height, 0, right, bottom,
+                          &deviceRight,
                           &deviceBottom);
 
 
-       // int width = right-left;
-       // int height = top-bottom;
-        left=deviceX+offsetX;
-        top=deviceY+offsetY;
-        int  new_width =deviceRight - left;
-        int   new_height =deviceBottom - top;
+        // int width = right-left;
+        // int height = top-bottom;
+        left = deviceX + offsetX;
+        top = deviceY + offsetY;
+        int new_width = deviceRight - left;
+        int new_height = deviceBottom - top;
 
         right = left + new_width;
         bottom = top + new_height;
-       /* right=left+width;
-        bottom=top+height;*/
-        env->CallVoidMethod(rect, rectF_set, (float)left, (float)top, (float)right, (float)bottom);
+        /* right=left+width;
+         bottom=top+height;*/
+        env->CallVoidMethod(rect, rectF_set, (float) left, (float) top, (float) right,
+                            (float) bottom);
     }
     return ret;
 }
 
 JNI_FUNC(void, PdfiumCore, nativeFindTextPageEnd)(JNI_ARGS, jlong searchPtr) {
-    FPDFText_FindClose((FPDF_SCHHANDLE)searchPtr);
+    FPDFText_FindClose((FPDF_SCHHANDLE) searchPtr);
 }
 JNI_FUNC(jint, PdfiumCore, nativeGetFindLength)(JNI_ARGS, jlong searchPtr) {
-    return FPDFText_GetSchCount((FPDF_SCHHANDLE)searchPtr);
+    return FPDFText_GetSchCount((FPDF_SCHHANDLE) searchPtr);
 }
 
 JNI_FUNC(jlong, PdfiumCore, nativeGetStringChars)(JNI_ARGS, jstring key) {
     //LOGE("fatal nativeGetStringChars %ld", (long)key);
-    return (long)env->GetStringChars(key, 0);
+    return (long) env->GetStringChars(key, 0);
 }
 JNI_FUNC(jint, PdfiumCore, nativeFindTextPage)(JNI_ARGS, jlong textPtr, jstring key, jint flag) {
-    const unsigned short * keyStr = env->GetStringChars(key, 0);
-    FPDF_TEXTPAGE text = (FPDF_TEXTPAGE)textPtr;
-    int foundIdx=-1;
-    if(text) {
+    const unsigned short *keyStr = env->GetStringChars(key, 0);
+    FPDF_TEXTPAGE text = (FPDF_TEXTPAGE) textPtr;
+    int foundIdx = -1;
+    if (text) {
         FPDF_SCHHANDLE findHandle = FPDFText_FindStart(text, keyStr, flag, 0);
         bool ret = FPDFText_FindNext(findHandle);
-        if(ret) {
+        if (ret) {
             foundIdx = FPDFText_GetSchResultIndex(findHandle);
         }
         FPDFText_FindClose(findHandle);
@@ -977,12 +986,14 @@ JNI_FUNC(jint, PdfiumCore, nativeFindTextPage)(JNI_ARGS, jlong textPtr, jstring 
     return foundIdx;
 }
 JNI_FUNC(jboolean, PdfiumCore, nativeFindTextPageNext)(JNI_ARGS, jlong searchPtr) {
-    return FPDFText_FindNext((FPDF_SCHHANDLE)searchPtr);
+    return FPDFText_FindNext((FPDF_SCHHANDLE) searchPtr);
 }
-JNI_FUNC(jlong, PdfiumCore, nativeFindTextPageStart)(JNI_ARGS, jlong textPtr, jlong keyStr, jint flag, jint startIdx) {
+JNI_FUNC(jlong, PdfiumCore, nativeFindTextPageStart)(JNI_ARGS, jlong textPtr, jlong keyStr,
+                                                     jint flag, jint startIdx) {
     //const unsigned short * keyStr = env->GetStringChars(key, 0);
-    FPDF_SCHHANDLE findHandle = FPDFText_FindStart((FPDF_TEXTPAGE)textPtr, (const jchar *)keyStr, flag, startIdx);
-    return (jlong)findHandle;
+    FPDF_SCHHANDLE findHandle = FPDFText_FindStart((FPDF_TEXTPAGE) textPtr, (const jchar *) keyStr,
+                                                   flag, startIdx);
+    return (jlong) findHandle;
 }
 JNI_FUNC(jobject, PdfiumCore, nativePageCoordsToDevice)(JNI_ARGS, jlong pagePtr, jint startX,
                                                         jint startY, jint sizeX,
