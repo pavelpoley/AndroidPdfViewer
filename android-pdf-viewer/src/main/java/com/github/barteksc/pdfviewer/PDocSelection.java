@@ -19,26 +19,28 @@ import androidx.annotation.Nullable;
 
 import com.github.barteksc.pdfviewer.model.SearchRecord;
 import com.github.barteksc.pdfviewer.model.SearchRecordItem;
-import com.github.barteksc.pdfviewer.util.Constants;
 
 import java.util.ArrayList;
+import java.util.List;
 
 /**
  * A View to paint PDF selections, [magnifier] and search highlights
  */
+
+@SuppressWarnings("unused")
 public class PDocSelection extends View {
 
     private static final String TAG = "PDocSelection";
     private Magnifier magnifier;
 
 
-    public boolean supressRecalcInval;
+    public boolean suppressRecalculateInvalidate;
     PDFView pdfView;
     float drawableWidth = 60;
     float drawableHeight = 30;
     float drawableDeltaW = drawableWidth / 4;
     private Paint rectPaint;
-    Paint rectFramePaint;
+    Paint searchedFocusedPaint;
     Paint rectHighlightPaint;
 
     RectF startHandleRectF;
@@ -78,15 +80,19 @@ public class PDocSelection extends View {
         rectPaint = new Paint();
         startHandleRectF = new RectF();
         endHandleRectF = new RectF();
+
         rectPaint.setColor(0X66109AFE);
+        PorterDuffXfermode xfermode = new PorterDuffXfermode(PorterDuff.Mode.DARKEN);
+        rectPaint.setXfermode(xfermode);
+
         rectHighlightPaint = new Paint();
         rectHighlightPaint.setColor(Color.YELLOW);
-        rectPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DARKEN));
-        rectHighlightPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DARKEN));
-        rectFramePaint = new Paint();
-        rectFramePaint.setColor(0XCCC7AB21);
-        rectFramePaint.setStyle(Paint.Style.STROKE);
-        rectFramePaint.setStrokeWidth(0.5f);
+        rectHighlightPaint.setXfermode(xfermode);
+
+
+        searchedFocusedPaint = new Paint();
+        searchedFocusedPaint.setColor(0X660000FF);
+        searchedFocusedPaint.setXfermode(xfermode);
     }
 
     private final int[] viewPosition = new int[2];
@@ -127,12 +133,12 @@ public class PDocSelection extends View {
 
                 pdfView.dragPinchManager.getSelRects(rectPagePool, selSt, selEd);//+10
             }
-            recalcHandles();
+            recalculateHandles();
             rectPoolSize = pageCount + 1;
         } else {
             rectPoolSize = 0;
         }
-        if (!supressRecalcInval) {
+        if (!suppressRecalculateInvalidate) {
             invalidate();
         }
     }
@@ -208,7 +214,7 @@ public class PDocSelection extends View {
     }
 
 
-    public void recalcHandles() {
+    public void recalculateHandles() {
         long tid = pdfView.dragPinchManager.prepareText();
         if (pdfView.isNotCurrentPage(tid)) {
             return;
@@ -219,11 +225,11 @@ public class PDocSelection extends View {
         int dir = pdfView.selPageEd - pdfView.selPageSt;
         dir = (int) Math.signum(dir == 0 ? ed - st : dir);
         if (dir != 0) {
-            String atext = pdfView.dragPinchManager.allText;
-            int len = atext.length();
+            String allText = pdfView.dragPinchManager.allText;
+            int len = allText.length();
             if (st >= 0 && st < len) {
                 char c;
-                while (((c = atext.charAt(st)) == '\r' || c == '\n') && st + dir >= 0 && st + dir < len) {
+                while (((c = allText.charAt(st)) == '\r' || c == '\n') && st + dir >= 0 && st + dir < len) {
                     st += dir;
                 }
             }
@@ -232,13 +238,13 @@ public class PDocSelection extends View {
             pdfView.getCharLoosePos(pdfView.handleLeftPos, st);
 
             pdfView.dragPinchManager.prepareText();
-            atext = pdfView.dragPinchManager.allText;
-            len = atext.length();
+            allText = pdfView.dragPinchManager.allText;
+            len = allText.length();
             int delta = -1;
             if (ed >= 0 && ed < len) {
                 char c;
                 dir *= -1;
-                while (((c = atext.charAt(ed)) == '\r' || c == '\n') && ed + dir >= 0 && ed + dir < len) {
+                while (((c = allText.charAt(ed)) == '\r' || c == '\n') && ed + dir >= 0 && ed + dir < len) {
                     delta = 0;
                     ed += dir;
                 }
@@ -249,7 +255,6 @@ public class PDocSelection extends View {
         }
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     protected void onDraw(@NonNull Canvas canvas) {
         if (pdfView == null) {
@@ -257,35 +262,17 @@ public class PDocSelection extends View {
         }
         super.onDraw(canvas);
         try {
-            Matrix matrix = pdfView.matrix;
             if (pdfView.isSearching && pdfView.pdfFile != null) {
-                SearchRecord record = getSearchRecord(pdfView.currentPage);
-                if (record != null) {
-                    pdfView.getAllMatchOnPage(record, record.pageIdx);
-                    ArrayList<SearchRecordItem> data = (ArrayList<SearchRecordItem>) record.data;
-                    for (int j = 0, len = data.size(); j < len; j++) {
-                        RectF[] rects = data.get(j).rects;
-                        if (rects != null) {
-                            for (RectF rI : rects) {
-                                pdfView.sourceToViewRectFFSearch(rI, VR, pdfView.currentPage);
-                                matrix.reset();
-                                int bmWidth = (int) rI.width() + 2;
-                                int bmHeight = (int) rI.height() + 2;
-                                pdfView.setMatrixArray(pdfView.srcArray, 0, 0, bmWidth, 0, bmWidth, bmHeight, 0, bmHeight);
-                                pdfView.setMatrixArray(pdfView.dstArray, VR.left, VR.top, VR.right, VR.top, VR.right, VR.bottom, VR.left, VR.bottom);
-                                matrix.setPolyToPoly(pdfView.srcArray, 0, pdfView.dstArray, 0, 4);
-                                matrix.postRotate(0, pdfView.getScreenWidth(), pdfView.getScreenHeight());
-                                canvas.save();
-                                canvas.concat(matrix);
-                                VR.set(0, 0, bmWidth, bmHeight);
-                                canvas.drawRect(VR, rectHighlightPaint);
-                                canvas.restore();
-                            }
-                        }
-                    }
-                }
+                int currentPage = pdfView.currentPage;
+                var record0 = pdfView.getAllMatchOnPage(getSearchRecord(currentPage - 1));
+                var record = pdfView.getAllMatchOnPage(getSearchRecord(currentPage));
+                var record1 = pdfView.getAllMatchOnPage(getSearchRecord(currentPage + 1));
+                highlightSearch(canvas, record0);
+                highlightSearch(canvas, record);
+                highlightSearch(canvas, record1);
             }
             if (pdfView.hasSelection && pdfView.pdfFile != null) {
+                var matrix = pdfView.matrix;
                 for (int i = 0; i < rectPoolSize; i++) {
                     ArrayList<RectF> rectPage = rectPool.get(i);
                     for (int j = 0, rectPageSize = rectPage.size(); j < rectPageSize; j++) {
@@ -296,10 +283,7 @@ public class PDocSelection extends View {
                         int bmHeight = (int) rI.height() + 2;
                         pdfView.setMatrixArray(pdfView.srcArray, 0, 0, bmWidth, 0, bmWidth, bmHeight, 0, bmHeight);
                         pdfView.setMatrixArray(pdfView.dstArray, VR.left, VR.top, VR.right, VR.top, VR.right, VR.bottom, VR.left, VR.bottom);
-
                         matrix.setPolyToPoly(pdfView.srcArray, 0, pdfView.dstArray, 0, 4);
-                        matrix.postRotate(0, pdfView.getScreenWidth(), pdfView.getScreenHeight());
-
                         canvas.save();
                         canvas.concat(matrix);
                         VR.set(0, 0, bmWidth, bmHeight);
@@ -336,10 +320,35 @@ public class PDocSelection extends View {
         }
     }
 
+    private void highlightSearch(@NonNull Canvas canvas, List<SearchRecordItem> record) {
+        var matrix = pdfView.matrix;
+        for (int j = 0, len = record.size(); j < len; j++) {
+            SearchRecordItem searchRecordItem = record.get(j);
+            if (searchRecordItem != null) {
+                for (RectF rI : searchRecordItem.rectFS) {
+                    pdfView.sourceToViewRectFFSearch(rI, VR, searchRecordItem.pageIndex);
+                    matrix.reset();
+                    int bmWidth = (int) rI.width() + 2;
+                    int bmHeight = (int) rI.height() + 2;
+                    pdfView.setMatrixArray(pdfView.srcArray, 0, 0, bmWidth, 0, bmWidth, bmHeight, 0, bmHeight);
+                    pdfView.setMatrixArray(pdfView.dstArray, VR.left, VR.top, VR.right, VR.top, VR.right, VR.bottom, VR.left, VR.bottom);
+                    matrix.setPolyToPoly(pdfView.srcArray, 0, pdfView.dstArray, 0, 4);
+                    canvas.save();
+                    canvas.concat(matrix);
+                    VR.set(0, 0, bmWidth, bmHeight);
+                    canvas.drawRect(VR, pdfView.currentFocusedSearchItem == searchRecordItem ? searchedFocusedPaint : rectHighlightPaint);
+                    canvas.restore();
+                }
+            }
+        }
+    }
+
 
     /**
      * To draw search result after and before current page
      **/
+
+    @Nullable
     private SearchRecord getSearchRecord(int page) {
         if (pdfView.searchRecords.containsKey(page)) {
             return pdfView.searchRecords.get(page);

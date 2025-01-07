@@ -13,6 +13,7 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.PopupWindow;
+import android.widget.SearchView;
 import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
@@ -57,7 +58,7 @@ public class MainActivity extends AppCompatActivity {
                 .scrollHandle(new DefaultScrollHandle(this))
                 .enableSwipe(true)
                 .swipeHorizontal(false)
-                .enableDoubletap(true)
+                .enableDoubleTap(true)
                 .defaultPage(0)
                 .swipeHorizontal(false)
                 .onPageScroll((page, positionOffset) -> hidePopupMenu())
@@ -69,6 +70,21 @@ public class MainActivity extends AppCompatActivity {
                     return true;
                 })
                 .load();
+        binding.searchPdf.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
+            @Override
+            public boolean onQueryTextSubmit(String query) {
+                pdfView.search(query);
+                binding.searchPdf.clearFocus();
+                return true;
+            }
+
+            @Override
+            public boolean onQueryTextChange(String newText) {
+                return false;
+            }
+        });
+        binding.next.setOnClickListener(v -> pdfView.navigateToNextSearchItem());
+        binding.prev.setOnClickListener(v -> pdfView.navigateToPreviousSearchItem());
 
         pdfView.setSelectionPaintView(binding.docSelection);
     }

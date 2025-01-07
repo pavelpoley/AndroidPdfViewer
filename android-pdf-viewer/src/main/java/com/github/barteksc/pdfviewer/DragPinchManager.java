@@ -44,6 +44,8 @@ import java.util.ArrayList;
  * This Manager takes care of moving the PDFView,
  * set its zoom track user actions.
  */
+
+@SuppressWarnings("unused")
 class DragPinchManager implements GestureDetector.OnGestureListener, GestureDetector.OnDoubleTapListener, ScaleGestureDetector.OnScaleGestureListener, View.OnTouchListener {
     private static final String TAG = "DragPinchManager";
     float lastX;
@@ -106,7 +108,8 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
         boolean linkTapped = checkLinkTapped(e.getX(), e.getY());
         if (!onTapHandled && !linkTapped) {
             ScrollHandle ps = pdfView.getScrollHandle();
-            if (ps != null && !pdfView.documentFitsView()) {
+            boolean fitsView = pdfView.documentFitsView();
+            if (ps != null && !fitsView) {
                 if (!ps.shown()) {
                     ps.show();
                 } else {
@@ -153,7 +156,8 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
         return -1;
     }
 
-    private boolean wordTapped(float x, float y, float tolFactor) {
+
+    private boolean wordTapped(float x, float y, float totalFactor) {
         PdfFile pdfFile = pdfView.pdfFile;
         if (pdfFile == null) {
             return false;
@@ -183,8 +187,8 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
                                     tid,
                                     Math.abs(mappedX - pageX),
                                     Math.abs(mappedY - pageY),
-                                    10.0 * tolFactor,
-                                    10.0 * tolFactor);
+                                    10.0 * totalFactor,
+                                    10.0 * totalFactor);
 
                     if (charIdx >= 0) {
                         int ed = pageBreakIterator.following(charIdx);
@@ -353,7 +357,7 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
 
     @Override
     public boolean onDoubleTap(@NonNull MotionEvent e) {
-        if (!pdfView.isDoubletapEnabled()) {
+        if (!pdfView.isDoubleTapEnabled()) {
             return false;
         }
 
@@ -637,7 +641,7 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
                 }
             }
 
-            pdfView.selectionPaintView.supressRecalcInval = true;
+            pdfView.selectionPaintView.suppressRecalculateInvalidate = true;
 
             // Redraw selection and trigger selection callbacks
             pdfView.redrawSel();
@@ -647,7 +651,7 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
                 Log.e(TAG, "Failed to call onSelection", e);
             }
 
-            pdfView.selectionPaintView.supressRecalcInval = false;
+            pdfView.selectionPaintView.suppressRecalculateInvalidate = false;
         }
     }
 
