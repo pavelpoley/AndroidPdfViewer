@@ -125,8 +125,8 @@ public class PDFView extends RelativeLayout {
     final float[] srcArray = new float[8];
     final float[] dstArray = new float[8];
     private PDocSearchTask task;
-    float lineHeightLeft;
-    float lineHeightRight;
+    float lineHeightStart;
+    float lineHeightEnd;
     private static final String TAG = PDFView.class.getSimpleName();
     final RectF handleLeftPos = new RectF();
     final RectF handleRightPos = new RectF();
@@ -138,8 +138,8 @@ public class PDFView extends RelativeLayout {
     int selStart;
     int selEnd;
     final Matrix matrix = new Matrix();
-    Drawable handleLeft;
-    Drawable handleRight;
+    Drawable startSelectionHandle;
+    Drawable endSelectionHandle;
     Drawable draggingHandle;
     private float minZoom = MINIMUM_ZOOM;
     private float midZoom = (MINIMUM_ZOOM + MAXIMUM_ZOOM) / 2;
@@ -180,6 +180,10 @@ public class PDFView extends RelativeLayout {
             String searchWord = pdfiumCore.nativeGetTextPart(textPtr, item.st, item.ed);
             this.callbacks.callOnSearchMatch(page, searchWord);
         }
+    }
+
+    public boolean getHasSelection() {
+        return hasSelection;
     }
 
     /**
@@ -637,15 +641,16 @@ public class PDFView extends RelativeLayout {
     }
 
     void initSelection() {
-        handleLeft = ResourcesCompat.getDrawable(getResources(),
+        startSelectionHandle = ResourcesCompat.getDrawable(getResources(),
                 R.drawable.abc_text_select_handle_left_mtrl_dark, null);
-        handleRight = ResourcesCompat.getDrawable(getResources(),
+        endSelectionHandle = ResourcesCompat.getDrawable(getResources(),
                 R.drawable.abc_text_select_handle_right_mtrl_dark, null);
-        ColorFilter colorFilter = new PorterDuffColorFilter(0XDD309AfE, PorterDuff.Mode.SRC_IN);
-        handleLeft.setColorFilter(colorFilter);
-        handleRight.setColorFilter(colorFilter);
-        handleLeft.setAlpha(255);
-        handleRight.setAlpha(255);
+        ColorFilter colorFilter = new PorterDuffColorFilter(0XDD309AFE, PorterDuff.Mode.SRC_IN);
+        ColorFilter colorFilterEnd = new PorterDuffColorFilter(0XDDbbcc02, PorterDuff.Mode.SRC_IN);
+        startSelectionHandle.setColorFilter(colorFilter);
+        endSelectionHandle.setColorFilter(colorFilterEnd);
+        startSelectionHandle.setAlpha(255);
+        endSelectionHandle.setAlpha(255);
         moveSlop = 1.6f;
     }
 
@@ -1108,23 +1113,24 @@ public class PDFView extends RelativeLayout {
                 if (hasSelection) {
                     int pageStart = selPageSt;
                     int pageCount = selPageEd - pageStart;
+                    int startCharIndex = Math.min(selStart, selEnd);
+                    int endCharIndex = Math.max(selStart, selEnd);
+
                     if (pageCount == 0) {
                         dragPinchManager.prepareText();
-                        int newSelEnd = selEnd;
-                        if (selEnd > dragPinchManager.allText.length())
-                            newSelEnd = dragPinchManager.allText.length();
-                        return dragPinchManager.allText.substring(selStart, newSelEnd);
+                        int newSelEnd = Math.min(endCharIndex, dragPinchManager.allText.length());
+                        return dragPinchManager.allText.substring(startCharIndex, newSelEnd);
                     }
                     StringBuilder sb = new StringBuilder();
                     int selCount = 0;
                     for (int i = 0; i <= pageCount; i++) {
                         dragPinchManager.prepareText();
                         int len = dragPinchManager.allText.length();
-                        selCount += i == 0 ? len - selStart : i == pageCount ? selEnd : len;
+                        selCount += i == 0 ? len - startCharIndex : i == pageCount ? endCharIndex : len;
                     }
                     sb.ensureCapacity(selCount + 64);
                     for (int i = 0; i <= pageCount; i++) {
-                        sb.append(dragPinchManager.allText.substring(i == 0 ? selStart : 0, i == pageCount ? selEnd : dragPinchManager.allText.length()));
+                        sb.append(dragPinchManager.allText.substring(i == 0 ? startCharIndex : 0, i == pageCount ? endCharIndex : dragPinchManager.allText.length()));
                     }
                     return sb.toString();
                 }
@@ -1160,6 +1166,10 @@ public class PDFView extends RelativeLayout {
     /**
      * Draw a given PagePart on the canvas
      */
+
+    private final Rect srcRect = new Rect();
+    private final RectF dstRect = new RectF();
+
     private void drawPart(Canvas canvas, PagePart part) {
         // Can seem strange, but avoid lot of calls
         RectF pageRelativeBounds = part.getPageRelativeBounds();
@@ -1185,7 +1195,7 @@ public class PDFView extends RelativeLayout {
         }
         canvas.translate(localTranslationX, localTranslationY);
 
-        Rect srcRect = new Rect(0, 0, renderedBitmap.getWidth(),
+        srcRect.set(0, 0, renderedBitmap.getWidth(),
                 renderedBitmap.getHeight());
 
         float offsetX = toCurrentScale(pageRelativeBounds.left * size.getWidth());
@@ -1196,7 +1206,7 @@ public class PDFView extends RelativeLayout {
         // If we use float values for this rectangle, there will be
         // a possible gap between page parts, especially when
         // the zoom level is high.
-        RectF dstRect = new RectF((int) offsetX, (int) offsetY,
+        dstRect.set((int) offsetX, (int) offsetY,
                 (int) (offsetX + width),
                 (int) (offsetY + height));
 
@@ -1442,6 +1452,8 @@ public class PDFView extends RelativeLayout {
         } else {
             animationManager.startXAnimation(currentXOffset, -offset);
         }
+
+        Log.d(TAG, "performPageSnap: ");
     }
 
     /**
@@ -1894,7 +1906,8 @@ public class PDFView extends RelativeLayout {
 
         private OnScaleListener onScaleListener;
 
-        private OnSelectionListener onSelectionListener;
+        private Runnable onSelectionListener;
+        private OnSelectionListener onSelectionEndedListener;
 
         private OnSearchBeginListener onSearchBeginListener;
 
@@ -2014,8 +2027,13 @@ public class PDFView extends RelativeLayout {
             return this;
         }
 
-        public Configurator onSelection(OnSelectionListener onSelectionListener) {
+        public Configurator onSelectionInProgress(Runnable onSelectionListener) {
             this.onSelectionListener = onSelectionListener;
+            return this;
+        }
+
+        public Configurator onSelection(OnSelectionListener onSelectionListener) {
+            this.onSelectionEndedListener = onSelectionListener;
             return this;
         }
 
@@ -2140,6 +2158,7 @@ public class PDFView extends RelativeLayout {
             PDFView.this.callbacks.setOnTap(onTapListener);
             PDFView.this.callbacks.setOnScale(onScaleListener);
             PDFView.this.callbacks.setOnSelection(onSelectionListener);
+            PDFView.this.callbacks.setOnSelectionEndedListener(onSelectionEndedListener);
             PDFView.this.callbacks.setOnSearchBegin(onSearchBeginListener);
             PDFView.this.callbacks.setOnSearchEnd(onSearchEndListener);
             PDFView.this.callbacks.setOnSearchMatch(onSearchMatchListener);

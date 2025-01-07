@@ -8,15 +8,18 @@ import android.graphics.Paint;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffXfermode;
 import android.graphics.RectF;
+import android.os.Build;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.View;
+import android.widget.Magnifier;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.github.barteksc.pdfviewer.model.SearchRecord;
 import com.github.barteksc.pdfviewer.model.SearchRecordItem;
+import com.github.barteksc.pdfviewer.util.Constants;
 
 import java.util.ArrayList;
 
@@ -26,6 +29,9 @@ import java.util.ArrayList;
 public class PDocSelection extends View {
 
     private static final String TAG = "PDocSelection";
+    private Magnifier magnifier;
+
+
     public boolean supressRecalcInval;
     PDFView pdfView;
     float drawableWidth = 60;
@@ -62,6 +68,13 @@ public class PDocSelection extends View {
     }
 
     private void init() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            magnifier = new Magnifier.Builder(this)
+                    .setCornerRadius(50)
+                    .setDefaultSourceToMagnifierOffset(0, -200)
+                    .setInitialZoom(3f)
+                    .build();
+        }
         rectPaint = new Paint();
         startHandleRectF = new RectF();
         endHandleRectF = new RectF();
@@ -74,6 +87,23 @@ public class PDocSelection extends View {
         rectFramePaint.setColor(0XCCC7AB21);
         rectFramePaint.setStyle(Paint.Style.STROKE);
         rectFramePaint.setStrokeWidth(0.5f);
+    }
+
+    private final int[] viewPosition = new int[2];
+
+    void showMagnifier(float x, float y) {
+        if (magnifier == null) return;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            getLocationOnScreen(viewPosition);
+            magnifier.show(x, y - 22);
+        }
+    }
+
+    void dismissMagnifier() {
+        if (magnifier == null) return;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            magnifier.dismiss();
+        }
     }
 
     public void resetSel() {
@@ -198,7 +228,7 @@ public class PDocSelection extends View {
                 }
             }
             pdfView.getCharPos(pdfView.handleLeftPos, st);
-            pdfView.lineHeightLeft = pdfView.handleLeftPos.height() / 2;
+            pdfView.lineHeightStart = pdfView.handleLeftPos.height() / 2;
             pdfView.getCharLoosePos(pdfView.handleLeftPos, st);
 
             pdfView.dragPinchManager.prepareText();
@@ -214,7 +244,7 @@ public class PDocSelection extends View {
                 }
             }
             pdfView.getCharPos(pdfView.handleRightPos, ed + delta);
-            pdfView.lineHeightRight = pdfView.handleRightPos.height() / 2;
+            pdfView.lineHeightEnd = pdfView.handleRightPos.height() / 2;
             pdfView.getCharLoosePos(pdfView.handleRightPos, ed + delta);
         }
     }
@@ -228,7 +258,6 @@ public class PDocSelection extends View {
         super.onDraw(canvas);
         try {
             Matrix matrix = pdfView.matrix;
-
             if (pdfView.isSearching && pdfView.pdfFile != null) {
                 SearchRecord record = getSearchRecord(pdfView.currentPage);
                 if (record != null) {
@@ -256,7 +285,6 @@ public class PDocSelection extends View {
                     }
                 }
             }
-
             if (pdfView.hasSelection && pdfView.pdfFile != null) {
                 for (int i = 0; i < rectPoolSize; i++) {
                     ArrayList<RectF> rectPage = rectPool.get(i);
@@ -284,26 +312,25 @@ public class PDocSelection extends View {
                             int top = (int) VR.bottom;
                             int right = (int) VR.left;
                             int bottom = (int) (VR.bottom + handleSize);
-                            pdfView.handleLeft.setBounds(left, top, right, bottom);
+                            pdfView.startSelectionHandle.setBounds(left, top, right, bottom);
                             startHandleRectF.set(left, top, right, bottom);
                             matrix.mapRect(startHandleRectF);
-                            pdfView.handleLeft.draw(canvas);
+                            pdfView.startSelectionHandle.draw(canvas);
                         }
                         if (j == rectPage.size() - 1) {
                             int left = (int) (VR.right);
                             int top = (int) VR.bottom;
                             int right = (int) (VR.right + handleSize);
                             int bottom = (int) (VR.bottom + handleSize);
-                            pdfView.handleRight.setBounds(left, top, right, bottom);
+                            pdfView.endSelectionHandle.setBounds(left, top, right, bottom);
                             endHandleRectF.set(left, top, right, bottom);
                             matrix.mapRect(endHandleRectF);
-                            pdfView.handleRight.draw(canvas);
+                            pdfView.endSelectionHandle.draw(canvas);
                         }
                         canvas.restore();
                     }
                 }
             }
-
         } catch (Exception e) {
             Log.e(TAG, "onDraw: ", e);
         }

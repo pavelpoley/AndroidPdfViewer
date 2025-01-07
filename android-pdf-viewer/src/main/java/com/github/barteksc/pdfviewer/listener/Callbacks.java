@@ -20,7 +20,6 @@ import android.view.MotionEvent;
 
 import com.github.barteksc.pdfviewer.link.LinkHandler;
 import com.github.barteksc.pdfviewer.model.LinkTapEvent;
-import com.github.barteksc.pdfviewer.model.SearchRecord;
 
 public class Callbacks {
 
@@ -84,7 +83,9 @@ public class Callbacks {
     /**
      * Call back to call when user select some text
      */
-    private OnSelectionListener onSelectionListener;
+    private Runnable onSelectionListener;
+
+    private OnSelectionListener onSelectionEndedListener;
 
     /**
      * Call back to call when user search text
@@ -203,19 +204,30 @@ public class Callbacks {
     public void setOnScale(OnScaleListener onScaleListener) {
         this.onScaleListener = onScaleListener;
     }
+
     public void callOnScale(float zoomLevel) {
         if (onScaleListener != null) {
             onScaleListener.onScale(zoomLevel);
         }
     }
 
-    public void setOnSelection(OnSelectionListener onSelectionListener) {
+    public void setOnSelection(Runnable onSelectionListener) {
         this.onSelectionListener = onSelectionListener;
     }
 
-    public void callOnSelection(String text, RectF rect) {
+    public void setOnSelectionEndedListener(OnSelectionListener onSelectionEndedListener) {
+        this.onSelectionEndedListener = onSelectionEndedListener;
+    }
+
+    public void callIsTextSelectionInProgress() {
         if (onSelectionListener != null) {
-            onSelectionListener.onSelection(text, rect);
+            onSelectionListener.run();
+        }
+    }
+
+    public void callOnSelectionEnded(String text, RectF rectF) {
+        if (onSelectionEndedListener != null) {
+            onSelectionEndedListener.onSelection(text, rectF);
         }
     }
 

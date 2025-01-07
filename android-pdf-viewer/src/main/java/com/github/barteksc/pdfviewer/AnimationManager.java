@@ -24,6 +24,8 @@ import android.graphics.PointF;
 import android.view.animation.DecelerateInterpolator;
 import android.widget.OverScroller;
 
+import androidx.annotation.NonNull;
+
 
 /**
  * This manager is used by the PDFView to launch animations.
@@ -33,11 +35,11 @@ import android.widget.OverScroller;
  */
 class AnimationManager {
 
-    private PDFView pdfView;
+    private final PDFView pdfView;
 
     private ValueAnimator animation;
 
-    private OverScroller scroller;
+    private final OverScroller scroller;
 
     private boolean flinging = false;
 
@@ -190,26 +192,26 @@ class AnimationManager {
         }
 
         @Override
-        public void onAnimationCancel(Animator animation) {
+        public void onAnimationCancel(@NonNull Animator animation) {
             pdfView.loadPages();
             hideHandle();
-	    pdfView.callbacks.callOnScale(pdfView.getZoom());
+            pdfView.callbacks.callOnScale(pdfView.getZoom());
         }
 
         @Override
-        public void onAnimationEnd(Animator animation) {
+        public void onAnimationEnd(@NonNull Animator animation) {
             pdfView.loadPages();
             pdfView.performPageSnap();
             hideHandle();
-	    pdfView.callbacks.callOnScale(pdfView.getZoom());
+            pdfView.callbacks.callOnScale(pdfView.getZoom());
         }
 
         @Override
-        public void onAnimationRepeat(Animator animation) {
+        public void onAnimationRepeat(@NonNull Animator animation) {
         }
 
         @Override
-        public void onAnimationStart(Animator animation) {
+        public void onAnimationStart(@NonNull Animator animation) {
         }
 
     }

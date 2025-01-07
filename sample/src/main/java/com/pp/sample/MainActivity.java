@@ -31,7 +31,7 @@ public class MainActivity extends AppCompatActivity {
     private static final String TAG = "MainActivity";
     private ActivityMainBinding binding;
 
-    private static final long DEBOUNCE_DELAY_MS = 300; // Delay in milliseconds
+    private static final long DEBOUNCE_DELAY_MS = 500; // Delay in milliseconds
     private final Handler debounceHandler = new Handler(Looper.getMainLooper());
     private Runnable debounceRunnable;
 
@@ -59,19 +59,29 @@ public class MainActivity extends AppCompatActivity {
                 .swipeHorizontal(false)
                 .enableDoubletap(true)
                 .defaultPage(0)
+                .swipeHorizontal(false)
+                .onPageScroll((page, positionOffset) -> hidePopupMenu())
                 .spacing(10)
+                .onSelection(this::onTextSelected)
+                .onSelectionInProgress(this::hidePopupMenu)
+                .onTap(e -> {
+                    hidePopupMenu();
+                    return true;
+                })
                 .load();
+
         pdfView.setSelectionPaintView(binding.docSelection);
     }
 
 
     private void onTextSelected(String selectedText, RectF selectionRect) {
+        hidePopupMenu();
         if (debounceRunnable != null) {
             debounceHandler.removeCallbacks(debounceRunnable);
         }
 
         debounceRunnable = () -> {
-            if (selectedText != null && !selectedText.isEmpty()) {
+            if (selectedText != null && !selectedText.isBlank() && binding.pdfView.getHasSelection()) {
                 showContextMenuWithPopupWindow(selectedText, selectionRect);
             }
         };
@@ -102,24 +112,25 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
-    private void showContextMenuWithPopupWindow(String selectedText, RectF rect) {
+    private void showContextMenuWithPopupWindow(final String selectedText, final RectF rect) {
         preparePopUpMenu();
-        popupWindow.showAtLocation(binding.pdfView, Gravity.NO_GRAVITY, (int) rect.centerX(), (int) rect.top);
+        if (!binding.pdfView.getHasSelection()) return;
+        popupWindow.showAtLocation(binding.pdfView, Gravity.NO_GRAVITY, (int) rect.centerX() - menuBinding.getRoot().getWidth() / 2, (int) rect.top);
         menuBinding.menuCopy.setOnClickListener(v -> {
+            binding.pdfView.clearSelection();
             copyTextToClipboard(selectedText);
             popupWindow.dismiss();
         });
         menuBinding.menuShare.setOnClickListener(v -> {
+            binding.pdfView.clearSelection();
             shareText(selectedText);
             popupWindow.dismiss();
         });
     }
 
     private void preparePopUpMenu() {
-        if (popupWindow != null && popupWindow.isShowing()) {
-            popupWindow.dismiss();
-        }
-        if (menuBinding == null) {
+        hidePopupMenu();
+        if (popupWindow == null) {
             menuBinding = LayoutMenuPopupTextSelectionBinding.inflate(getLayoutInflater(), null, false);
             View popupView = menuBinding.getRoot();
             popupWindow = new PopupWindow(popupView,
@@ -128,5 +139,11 @@ public class MainActivity extends AppCompatActivity {
         }
 
 
+    }
+
+    private void hidePopupMenu() {
+        if (popupWindow != null && popupWindow.isShowing()) {
+            popupWindow.dismiss();
+        }
     }
 }

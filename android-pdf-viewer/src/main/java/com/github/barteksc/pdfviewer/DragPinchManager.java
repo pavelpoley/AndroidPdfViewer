@@ -39,7 +39,6 @@ import com.vivlio.android.pdfium.util.Size;
 import com.vivlio.android.pdfium.util.SizeF;
 
 import java.util.ArrayList;
-import java.util.Locale;
 
 /**
  * This Manager takes care of moving the PDFView,
@@ -53,7 +52,7 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
     float orgY;
     private static final Object lock = new Object();
 
-    Drawable draggingHandle;
+    Drawable currentSelectionHandle;
     float lineHeight;
 
     float view_pager_toguard_lastX;
@@ -221,6 +220,9 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
                 int tmp = selSt;
                 selSt = selEd;
                 selEd = tmp;
+
+                pdfView.draggingHandle = currentSelectionHandle == pdfView.startSelectionHandle
+                        ? pdfView.endSelectionHandle : pdfView.startSelectionHandle;
             }
             selEd -= selSt;
             if (selEd > 0) {
@@ -433,12 +435,9 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
         }
         if (wordTapped(e.getX(), e.getY(), 2.5f)) {
             pdfView.hasSelection = true;
-            draggingHandle = null;
+            currentSelectionHandle = null;
             sCursorPosStart.set(pdfView.handleRightPos.right, pdfView.handleRightPos.bottom);
-            pdfView.callbacks.callOnSelection(
-                    pdfView.getSelection(),
-                    pdfView.selectionPaintView.getRectFMappedToScreen()
-            );
+            pdfView.callbacks.callIsTextSelectionInProgress();
         }
         pdfView.callbacks.callOnLongPress(e);
     }
@@ -541,34 +540,34 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
         if (!enabled) {
             return false;
         }
-        boolean retVal = scaleGestureDetector.onTouchEvent(event);
-        retVal = gestureDetector.onTouchEvent(event) || retVal;
+        scaleGestureDetector.onTouchEvent(event);
+        gestureDetector.onTouchEvent(event);
 
         lastX = event.getX();
         lastY = event.getY();
         pdfView.redrawSel();
+
+        if (event.getAction() == MotionEvent.ACTION_CANCEL || event.getAction() == MotionEvent.ACTION_UP) {
+            stopTextSelection();
+        }
+
+
         if (event.getAction() == MotionEvent.ACTION_UP) {
-            if (draggingHandle != null) {
-                draggingHandle = null;
-            }
-            pdfView.startInDrag = false;
             if (scrolling) {
                 scrolling = false;
                 onScrollEnd(event);
             }
         }
         if (event.getAction() == MotionEvent.ACTION_DOWN) {
-
             PDocSelection paintView = pdfView.selectionPaintView;
-
             orgX = view_pager_toguard_lastX = lastX;
             orgY = view_pager_toguard_lastY = lastY;
             if (pdfView.hasSelection) {
-                if (paintView.startHandleRectF.contains(orgX, orgY)) {
-                    draggingHandle = pdfView.handleLeft;
+                if (paintView.startHandleRectF.contains(event.getX(), event.getY())) {
+                    currentSelectionHandle = pdfView.startSelectionHandle;
                     sCursorPosStart.set(pdfView.handleLeftPos.left, pdfView.handleLeftPos.bottom);
-                } else if (paintView.endHandleRectF.contains(orgX, orgY)) {
-                    draggingHandle = pdfView.handleRight;
+                } else if (paintView.endHandleRectF.contains(event.getX(), event.getY())) {
+                    currentSelectionHandle = pdfView.endSelectionHandle;
                     sCursorPosStart.set(pdfView.handleRightPos.right, pdfView.handleRightPos.bottom);
                 }
             }
@@ -582,28 +581,45 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
         return true;
     }
 
+    private void stopTextSelection() {
+        if (currentSelectionHandle != null) {
+            currentSelectionHandle = null;
+        }
+        pdfView.selectionPaintView.dismissMagnifier();
+        int startSelectedIndex = pdfView.selStart;
+        int endSelectionIndex = pdfView.selEnd;
+        pdfView.selStart = Math.min(startSelectedIndex, endSelectionIndex);
+        pdfView.selEnd = Math.max(startSelectedIndex, endSelectionIndex);
+        pdfView.startInDrag = false;
+        if (pdfView.hasSelection) {
+            pdfView.callbacks.callOnSelectionEnded(
+                    pdfView.getSelection(),
+                    pdfView.selectionPaintView.getRectFMappedToScreen()
+            );
+        }
+
+    }
+
     private void dragHandle(float x, float y) {
-        if (draggingHandle != null) {
+        if (currentSelectionHandle != null) {
+
+            pdfView.selectionPaintView.showMagnifier(x, y);
+
             pdfView.startInDrag = true;
 
+            boolean isStart = (currentSelectionHandle == pdfView.startSelectionHandle);
+
             // Determine the appropriate line height based on the handle being dragged
-            lineHeight = (draggingHandle == pdfView.handleLeft) ? pdfView.lineHeightLeft : pdfView.lineHeightRight;
+            lineHeight = isStart ? pdfView.lineHeightStart : pdfView.lineHeightEnd;
 
             // Calculate the new position of the cursor based on drag
             float posX = sCursorPosStart.x + (lastX - orgX) / pdfView.getZoom();
             float posY = sCursorPosStart.y + (lastY - orgY) / pdfView.getZoom();
             pdfView.sCursorPos.set(posX, posY);
 
-            boolean isStart = (draggingHandle == pdfView.handleLeft);
             int page = pdfView.getPageNumberAtScreen(x, y);
             int pageIndex = pdfView.pdfFile.documentPage(page);
             int charIdx = getCharIdxAtPos(x, y - lineHeight, 10);
-
-            if (isStart) {
-                Log.d(TAG, String.format(Locale.ENGLISH, "Start: C %s E %s S %s", charIdx, pdfView.selEnd, pdfView.selStart));
-
-            }
-
             if (charIdx >= 0) {
                 if (isStart) {
                     if (pageIndex != pdfView.selPageSt || charIdx != pdfView.selStart) {
@@ -626,10 +642,7 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
             // Redraw selection and trigger selection callbacks
             pdfView.redrawSel();
             try {
-                pdfView.callbacks.callOnSelection(
-                        pdfView.getSelection(),
-                        pdfView.selectionPaintView.getRectFMappedToScreen()
-                );
+                pdfView.callbacks.callIsTextSelectionInProgress();
             } catch (Exception e) {
                 Log.e(TAG, "Failed to call onSelection", e);
             }
