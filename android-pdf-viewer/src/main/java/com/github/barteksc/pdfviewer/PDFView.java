@@ -151,9 +151,12 @@ public class PDFView extends RelativeLayout {
     private final double cos = 1;//Math.cos(0);
     private final double sin = 0;//Math.sin(0);
     float drawableScale = 1.f;
-    public final Map<Integer, SearchRecord> searchRecords = new ArrayMap<>();
+    final Map<Integer, SearchRecord> searchRecords = new ArrayMap<>();
+
     SearchRecordItem currentFocusedSearchItem = null;
     private int index = -1;
+    private int currentMatchedWordIndex = 0;
+    private int searchMatchedCount = 0;
 
 
     public ArrayList<Decoration> decorations = new ArrayList<>();
@@ -178,23 +181,28 @@ public class PDFView extends RelativeLayout {
     public void notifyItemAdded(PDocSearchTask pDocSearchTask,
                                 ArrayList<SearchRecord> arr,
                                 SearchRecord schRecord,
-                                int page) {
-
+                                int page,
+                                String query) {
         searchRecords.put(page, schRecord);
         List<SearchRecordItem> data = getAllMatchOnPage(schRecord);
         if (pdfFile == null || pdfFile.pdfDocument == null) return;
-        for (int i = 0; i < data.size(); i++) {
-            SearchRecordItem item = data.get(i);
+        int totalRecord = data.size();
+        if (!data.isEmpty()) {
+            SearchRecordItem item = data.get(0);
             if (currentFocusedSearchItem == null) {
                 currentFocusedSearchItem = item;
-                index = i;
+                index = 0;
+                if (currentPage != item.pageIndex) {
+                    jumpTo(item.pageIndex);
+                }
             }
-
-            Long textPtr = pdfFile.pdfDocument.mNativeTextPtr.get(page);
-            if (textPtr == null) continue;
-            String searchWord = pdfiumCore.nativeGetTextPart(textPtr, item.st, item.ed);
-            this.callbacks.callOnSearchMatch(page, searchWord);
         }
+        searchMatchedCount += totalRecord;
+        this.callbacks.callOnSearchMatch(page, totalRecord, query);
+    }
+
+    public int getSearchMatchedCount() {
+        return searchMatchedCount;
     }
 
     public boolean getHasSelection() {
@@ -477,6 +485,8 @@ public class PDFView extends RelativeLayout {
 
     // Search methods
     public void search(String text) {
+        searchMatchedCount = 0;
+        currentMatchedWordIndex = 0;
         searchRecords.clear();
         currentFocusedSearchItem = null;
         index = -1;
@@ -488,18 +498,29 @@ public class PDFView extends RelativeLayout {
         task.start();
     }
 
-    public void navigateToNextSearchItem() {
-        if (this.currentFocusedSearchItem == null || index == -1) return;
+    public void clearSearch() {
+        this.searchRecords.clear();
+        closeTask();
+        selectionPaintView.invalidate();
+    }
+
+
+    /**
+     * @return true if navigated
+     */
+    public boolean navigateToNextSearchItem() {
+        if (this.currentFocusedSearchItem == null || index == -1) return false;
         var page = this.currentFocusedSearchItem.pageIndex;
         var record = searchRecords.get(page);
-        if (record == null || record.data == null) return;
+        if (record == null || record.data == null) return false;
         var nextIndex = index + 1;
         if (ArrayUtils.isValidIndex(record.data, nextIndex)) {
             currentFocusedSearchItem = record.data.get(nextIndex);
             index = nextIndex;
+            currentMatchedWordIndex = nextIndex;
             jumpTo(page, true);
             redrawSel();
-            return;
+            return true;
         }
         for (int i = page + 1; i < this.pdfFile.getPagesCount(); i++) {
             SearchRecord record1 = searchRecords.get(i);
@@ -508,27 +529,35 @@ public class PDFView extends RelativeLayout {
                 if (item != null) {
                     currentFocusedSearchItem = item;
                     index = 0;
+                    currentMatchedWordIndex += 1;
                     jumpTo(i, true);
                     redrawSel();
-                    break;
+                    return true;
                 }
             }
         }
+        return false;
     }
 
-    public void navigateToPreviousSearchItem() {
-        if (currentFocusedSearchItem == null || index == -1) return;
+
+    /**
+     * @return true if navigated
+     */
+    public boolean navigateToPreviousSearchItem() {
+        boolean navigated = false;
+
+        if (currentFocusedSearchItem == null || index == -1) return false;
 
         var page = currentFocusedSearchItem.pageIndex;
         var record = searchRecords.get(page);
-        if (record == null || record.data == null) return;
+        if (record == null || record.data == null) return false;
 
         var prevIndex = index - 1;
         if (ArrayUtils.isValidIndex(record.data, prevIndex)) {
             currentFocusedSearchItem = record.data.get(prevIndex);
             index = prevIndex;
             redrawSel();
-            return;
+            return true;
         }
         for (int i = page - 1; i >= 0; i--) {
             SearchRecord record1 = searchRecords.get(i);
@@ -538,12 +567,14 @@ public class PDFView extends RelativeLayout {
                 if (item != null) {
                     currentFocusedSearchItem = item;
                     index = lastIndex;
+                    currentMatchedWordIndex -= 1;
                     jumpTo(i, true);
                     redrawSel();
-                    break;
+                    return true;
                 }
             }
         }
+        return false;
     }
 
 
@@ -932,12 +963,12 @@ public class PDFView extends RelativeLayout {
     public void setNightMode(boolean nightMode) {
         this.nightMode = nightMode;
         if (nightMode) {
-            ColorMatrix colorMatrixInverted =
-                    new ColorMatrix(new float[]{
-                            -1, 0, 0, 0, 255,
-                            0, -1, 0, 0, 255,
-                            0, 0, -1, 0, 255,
-                            0, 0, 0, 1, 0});
+            ColorMatrix colorMatrixInverted = new ColorMatrix(new float[]{
+                    -1, 0, 0, 0, 255,
+                    0, -1, 0, 0, 255,
+                    0, 0, -1, 0, 255,
+                    0, 0, 0, 1, 0
+            });
 
             ColorMatrixColorFilter filter = new ColorMatrixColorFilter(colorMatrixInverted);
             paint.setColorFilter(filter);
@@ -945,6 +976,50 @@ public class PDFView extends RelativeLayout {
             paint.setColorFilter(null);
         }
     }
+
+    public void setNightMode(boolean nightMode, float brightnessScale, float contrastScale) {
+        this.nightMode = nightMode;
+        if (nightMode) {
+            // Invert colors
+            float[] src = {
+                    -1, 0, 0, 0, 255,
+                    0, -1, 0, 0, 255,
+                    0, 0, -1, 0, 255,
+                    0, 0, 0, 1, 0
+            };
+            ColorMatrix colorMatrixInverted = getColorMatrix(brightnessScale, contrastScale, src);
+
+            // Apply the final filter
+            ColorMatrixColorFilter filter = new ColorMatrixColorFilter(colorMatrixInverted);
+            paint.setColorFilter(filter);
+        } else {
+            // Reset to default
+            paint.setColorFilter(null);
+        }
+    }
+
+    @NonNull
+    private static ColorMatrix getColorMatrix(float brightnessScale, float contrastScale, float[] src) {
+        ColorMatrix colorMatrixInverted = new ColorMatrix(src);
+
+        // Adjust brightness
+        ColorMatrix brightnessMatrix = new ColorMatrix();
+        brightnessMatrix.setScale(brightnessScale, brightnessScale, brightnessScale, 1.0f);
+
+        // Adjust contrast
+        ColorMatrix contrastMatrix = new ColorMatrix(new float[]{
+                contrastScale, 0, 0, 0, 0,
+                0, contrastScale, 0, 0, 0,
+                0, 0, contrastScale, 0, 0,
+                0, 0, 0, 1, 0
+        });
+
+        // Combine all adjustments
+        colorMatrixInverted.postConcat(brightnessMatrix);
+        colorMatrixInverted.postConcat(contrastMatrix);
+        return colorMatrixInverted;
+    }
+
 
     void enableDoubleTap(boolean enableDoubleTap) {
         this.doubleTapEnabled = enableDoubleTap;

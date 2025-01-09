@@ -16,6 +16,7 @@ public class PDocSearchTask implements Runnable {
     private final WeakReference<PDFView> pdfViewRef;
     public final AtomicBoolean abort = new AtomicBoolean();
     public final String key;
+    private final String query;
     private Thread t;
     public final int flag = 0;
     private long keyStr;
@@ -25,6 +26,7 @@ public class PDocSearchTask implements Runnable {
     public PDocSearchTask(PDFView pdfView, String key) {
         this.pdfViewRef = new WeakReference<>(pdfView);
         this.key = key + "\0";
+        this.query = key;
     }
 
     public long getKeyStr() {
@@ -43,13 +45,19 @@ public class PDocSearchTask implements Runnable {
         if (finished) {
             pdfView.endSearch(arr);
         } else {
-            for (int i = 0; i < pdfView.getPageCount(); i++) {
+            for (int pageIndex = 0; pageIndex < pdfView.getPageCount(); pageIndex++) {
                 if (abort.get()) {
                     break;
                 }
-                SearchRecord schRecord = pdfView.findPageCached(key, i, 0);
+                SearchRecord schRecord = pdfView.findPageCached(key, pageIndex, 0);
                 if (schRecord != null) {
-                    pdfView.notifyItemAdded(this, arr, schRecord, i);
+                    pdfView.notifyItemAdded(
+                            this,
+                            arr,
+                            schRecord,
+                            pageIndex,
+                            query
+                    );
                 }
             }
 
