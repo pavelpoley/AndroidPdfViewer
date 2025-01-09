@@ -1,5 +1,6 @@
 plugins {
     alias(libs.plugins.android.library)
+    alias(libs.plugins.maven.publish)
 }
 android {
     namespace 'com.github.barteksc.pdfviewer'
@@ -9,6 +10,12 @@ android {
     defaultConfig {
         minSdkVersion 23
         targetSdkVersion 35
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
     }
 
     compileOptions {
@@ -23,4 +30,17 @@ dependencies {
     testImplementation libs.junit
     androidTestImplementation libs.androidx.junit
     androidTestImplementation libs.androidx.espresso.core
+}
+
+project.afterEvaluate {
+    publishing {
+        publications {
+            libraryProject(MavenPublication) {
+                setGroupId 'com.pp'
+                setArtifactId 'pdfViewer-release'
+                version '1.0'
+                artifact bundleReleaseAar
+            }
+        }
+    }
 }

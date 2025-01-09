@@ -1,5 +1,6 @@
 plugins {
     alias(libs.plugins.android.library)
+    alias(libs.plugins.maven.publish)
 }
 
 android {
@@ -42,4 +43,17 @@ dependencies {
     testImplementation libs.junit
     androidTestImplementation libs.androidx.junit
     androidTestImplementation libs.androidx.espresso.core
+}
+
+project.afterEvaluate {
+    publishing {
+        publications {
+            libraryProject(MavenPublication) {
+                setGroupId 'com.pp'
+                setArtifactId 'AndroidPdfium-release'
+                version '1.0'
+                artifact bundleReleaseAar
+            }
+        }
+    }
 }
