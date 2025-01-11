@@ -4,5 +4,10 @@
     <string name="share">Share</string>
     <string name="highlight">Highlight</string>
     <string name="pdf_viewer">PDF Viewer</string>
-    <string name="search_in_pdf">Search in pdf ...</string>
+    <string name="search_in_pdf">Search in pdf …</string>
+    <string name="load_pdf">load pdf</string>
+    <string name="close">close</string>
+    <string name="close_search">close</string>
+
+    <string name="search_navigation_placeholder">%d of %d</string>
 </resources>
