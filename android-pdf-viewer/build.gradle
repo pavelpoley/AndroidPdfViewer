@@ -9,7 +9,8 @@ android {
 
     defaultConfig {
         minSdkVersion 23
-        targetSdkVersion 35
+        //noinspection OldTargetApi
+        targetSdkVersion 34
     }
     buildTypes {
         release {
@@ -36,9 +37,9 @@ project.afterEvaluate {
     publishing {
         publications {
             libraryProject(MavenPublication) {
-                setGroupId 'com.pp'
-                setArtifactId 'pdfViewer-release'
-                version '1.0'
+                groupId 'com.github.pavelpoley'
+                artifactId 'pdf-viewer'
+                version '3.4.0'
                 artifact bundleReleaseAar
             }
         }

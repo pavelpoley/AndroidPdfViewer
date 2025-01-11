@@ -9,7 +9,8 @@ android {
 
     defaultConfig {
         minSdk 23
-        targetSdk 35
+        //noinspection OldTargetApi
+        targetSdk 34
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles "consumer-rules.pro"
@@ -49,9 +50,9 @@ project.afterEvaluate {
     publishing {
         publications {
             libraryProject(MavenPublication) {
-                setGroupId 'com.pp'
-                setArtifactId 'AndroidPdfium-release'
-                version '1.0'
+                groupId 'com.github.pavelpoley'
+                artifactId 'pdfium-android'
+                version '1.0.0'
                 artifact bundleReleaseAar
             }
         }
