@@ -52,6 +52,7 @@ import android.widget.RelativeLayout;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.content.ContextCompat;
 import androidx.core.content.res.ResourcesCompat;
 
 import com.github.barteksc.pdfviewer.exception.PageRenderingException;
@@ -193,12 +194,18 @@ public class PDFView extends RelativeLayout {
                 currentFocusedSearchItem = item;
                 index = 0;
                 if (currentPage != item.pageIndex) {
-                    jumpTo(item.pageIndex);
+                    ContextCompat.getMainExecutor(getContext()).execute(() -> jumpTo(item.pageIndex));
                 }
             }
         }
         searchMatchedCount += totalRecord;
-        this.callbacks.callOnSearchMatch(page, totalRecord, query);
+        try {
+            ContextCompat.getMainExecutor(getContext())
+                    .execute(
+                            () -> this.callbacks.callOnSearchMatch(page, totalRecord, query)
+                    );
+        } catch (Exception ignored) {
+        }
     }
 
     public int getSearchMatchedCount() {
