@@ -1,18 +1,47 @@
-apply plugin: 'com.android.library'
-
+plugins {
+    alias(libs.plugins.android.library)
+    id "maven-publish"
+}
 android {
+    namespace 'com.github.barteksc.pdfviewer'
+
     compileSdk 35
 
     defaultConfig {
         minSdkVersion 23
-        targetSdkVersion 33
+        //noinspection OldTargetApi
+        targetSdkVersion 34
     }
-    namespace 'com.github.barteksc.pdfviewer'
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
 
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
 }
 
 dependencies {
-    //noinspection GradleCompatible,GradleCompatible
-    implementation 'androidx.appcompat:appcompat:1.7.0'
-    api (project(":pdfium"))
+    implementation libs.androidx.appcompat
+    api(project(":pdfium"))
+    testImplementation libs.junit
+    androidTestImplementation libs.androidx.junit
+    androidTestImplementation libs.androidx.espresso.core
+}
+
+project.afterEvaluate {
+    publishing {
+        publications {
+            libraryProject(MavenPublication) {
+                groupId 'com.github.pavelpoley'
+                artifactId 'pdf-viewer'
+                version '3.4.0'
+                artifact bundleReleaseAar
+            }
+        }
+    }
 }

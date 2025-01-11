@@ -56,16 +56,18 @@ private:
     int fileFd;
 
 public:
-    FPDF_DOCUMENT pdfDocument = NULL;
+    FPDF_DOCUMENT pdfDocument = nullptr;
     size_t fileSize;
 
-    DocumentFile() { initLibraryIfNeed(); }
+    DocumentFile() {
+        initLibraryIfNeed();
+    }
 
     ~DocumentFile();
 };
 
 DocumentFile::~DocumentFile() {
-    if (pdfDocument != NULL) {
+    if (pdfDocument != nullptr) {
         FPDF_CloseDocument(pdfDocument);
     }
 
@@ -80,7 +82,7 @@ inline typename string_type::value_type *WriteInto(string_type *str, size_t leng
 }
 
 inline long getFileSize(int fd) {
-    struct stat file_state;
+    struct stat file_state{};
 
     if (fstat(fd, &file_state) >= 0) {
         return (long) (file_state.st_size);
@@ -91,7 +93,7 @@ inline long getFileSize(int fd) {
 }
 
 static char *getErrorDescription(const long error) {
-    char *description = NULL;
+    char *description = nullptr;
     switch (error) {
         case FPDF_ERR_SUCCESS:
             asprintf(&description, "No error.");
@@ -120,7 +122,7 @@ static char *getErrorDescription(const long error) {
 
 int jniThrowException(JNIEnv *env, const char *className, const char *message) {
     jclass exClass = env->FindClass(className);
-    if (exClass == NULL) {
+    if (exClass == nullptr) {
         LOGE("Unable to find exception class %s", className);
         return -1;
     }
@@ -188,35 +190,34 @@ static int getBlock(void *param, unsigned long position, unsigned char *outBuffe
 
 JNI_FUNC(jlong, PdfiumCore, nativeOpenDocument)(JNI_ARGS, jint fd, jstring password) {
 
-    size_t fileLength = (size_t) getFileSize(fd);
+    auto fileLength = (size_t) getFileSize(fd);
     if (fileLength <= 0) {
         jniThrowException(env, "java/io/IOException",
                           "File is empty");
         return -1;
     }
 
-    DocumentFile *docFile = new DocumentFile();
+    auto *docFile = new DocumentFile();
 
     FPDF_FILEACCESS loader;
     loader.m_FileLen = fileLength;
     loader.m_Param = reinterpret_cast<void *>(intptr_t(fd));
     loader.m_GetBlock = &getBlock;
 
-    const char *cpassword = NULL;
-    if (password != NULL) {
-        cpassword = env->GetStringUTFChars(password, NULL);
+    const char *cPassword = nullptr;
+    if (password != nullptr) {
+        cPassword = env->GetStringUTFChars(password, nullptr);
     }
 
-    FPDF_DOCUMENT document = FPDF_LoadCustomDocument(&loader, cpassword);
+    FPDF_DOCUMENT document = FPDF_LoadCustomDocument(&loader, cPassword);
 
-    if (cpassword != NULL) {
-        env->ReleaseStringUTFChars(password, cpassword);
+    if (cPassword != nullptr) {
+        env->ReleaseStringUTFChars(password, cPassword);
     }
 
     if (!document) {
         delete docFile;
-
-        const long errorNum = FPDF_GetLastError();
+        const long errorNum = (long) FPDF_GetLastError();
         if (errorNum == FPDF_ERR_PASSWORD) {
             jniThrowException(env, "com/vivlio/android/pdfium/PdfPasswordException",
                               "Password required or incorrect password.");
@@ -227,12 +228,9 @@ JNI_FUNC(jlong, PdfiumCore, nativeOpenDocument)(JNI_ARGS, jint fd, jstring passw
 
             free(error);
         }
-
         return -1;
     }
-
     docFile->pdfDocument = document;
-
     return reinterpret_cast<jlong>(docFile);
 }
 
@@ -946,8 +944,8 @@ JNI_FUNC(jboolean, PdfiumCore, nativeGetRect)(JNI_ARGS, jlong pagePtr, jint offs
         // int height = top-bottom;
         left = deviceX + offsetX;
         top = deviceY + offsetY;
-        int new_width = deviceRight - left;
-        int new_height = deviceBottom - top;
+        int new_width = (int) (deviceRight - left);
+        int new_height = (int) (deviceBottom - top);
 
         right = left + new_width;
         bottom = top + new_height;
@@ -968,7 +966,7 @@ JNI_FUNC(jint, PdfiumCore, nativeGetFindLength)(JNI_ARGS, jlong searchPtr) {
 
 JNI_FUNC(jlong, PdfiumCore, nativeGetStringChars)(JNI_ARGS, jstring key) {
     //LOGE("fatal nativeGetStringChars %ld", (long)key);
-    return (long) env->GetStringChars(key, 0);
+    return (long) env->GetStringChars(key, nullptr);
 }
 JNI_FUNC(jint, PdfiumCore, nativeFindTextPage)(JNI_ARGS, jlong textPtr, jstring key, jint flag) {
     const unsigned short *keyStr = env->GetStringChars(key, 0);

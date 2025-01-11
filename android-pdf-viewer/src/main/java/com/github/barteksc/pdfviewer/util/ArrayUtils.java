@@ -15,6 +15,8 @@
  */
 package com.github.barteksc.pdfviewer.util;
 
+import androidx.annotation.Nullable;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -24,7 +26,9 @@ public class ArrayUtils {
         // Prevents instantiation
     }
 
-    /** Transforms (0,1,2,2,3) to (0,1,2,3) */
+    /**
+     * Transforms (0,1,2,2,3) to (0,1,2,3)
+     */
     public static int[] deleteDuplicatedPages(int[] pages) {
         List<Integer> result = new ArrayList<>();
         int lastInt = -1;
@@ -41,7 +45,9 @@ public class ArrayUtils {
         return arrayResult;
     }
 
-    /** Transforms (0, 4, 4, 6, 6, 6, 3) into (0, 1, 1, 2, 2, 2, 3) */
+    /**
+     * Transforms (0, 4, 4, 6, 6, 6, 3) into (0, 1, 1, 2, 2, 2, 3)
+     */
     public static int[] calculateIndexesInDuplicateArray(int[] originalUserPages) {
         int[] result = new int[originalUserPages.length];
         if (originalUserPages.length == 0) {
@@ -70,5 +76,33 @@ public class ArrayUtils {
         }
         builder.append("]");
         return builder.toString();
+    }
+
+
+    /**
+     * Checks if the given index is valid for the ArrayList.
+     *
+     * @param list  the ArrayList to check.
+     * @param index the index to validate.
+     * @return true if the index is within bounds, false otherwise.
+     */
+    public static <T> boolean isValidIndex(@Nullable List<T> list, int index) {
+        return list != null && index >= 0 && index < list.size();
+    }
+
+    /**
+     * Safely retrieves an element from the ArrayList at the specified index.
+     * Returns null if the index is invalid.
+     *
+     * @param list  the ArrayList to retrieve the element from.
+     * @param index the index of the element.
+     * @return the element at the specified index, or null if the index is invalid.
+     */
+    @Nullable
+    public static <T> T getElementSafe(@Nullable List<T> list, int index) {
+        if (isValidIndex(list, index)) {
+            return list.get(index);
+        }
+        return null;
     }
 }

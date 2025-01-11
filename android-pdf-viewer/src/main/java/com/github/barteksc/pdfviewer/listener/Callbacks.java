@@ -255,9 +255,9 @@ public class Callbacks {
         this.onSearchMatchListener = onSearchMatchListener;
     }
 
-    public void callOnSearchMatch(int page, String word) {
+    public void callOnSearchMatch(int page, int totalMatched, String word) {
         if (onSearchMatchListener != null) {
-            onSearchMatchListener.onSearchMatch(page, word);
+            onSearchMatchListener.onSearchMatch(page, totalMatched, word);
         }
     }
 
