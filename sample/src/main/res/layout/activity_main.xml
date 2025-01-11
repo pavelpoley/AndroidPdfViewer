@@ -7,66 +7,89 @@
     android:layout_height="match_parent"
     tools:context=".MainActivity">
 
-    <com.google.android.material.appbar.AppBarLayout
+    <androidx.appcompat.widget.Toolbar
         android:id="@+id/main_toolbar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        app:layout_constraintTop_toTopOf="parent">
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal">
-
-            <SearchView
-                android:id="@+id/search_pdf"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:hint="@string/search_in_pdf" />
-
-            <ImageButton
-                android:id="@+id/prev"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:contentDescription="@string/app_name"
-                android:src="@drawable/navigate_before" />
-
-            <ImageButton
-                android:id="@+id/next"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:contentDescription="@string/app_name"
-                android:src="@drawable/navigate_next" />
-        </LinearLayout>
-    </com.google.android.material.appbar.AppBarLayout>
+        app:layout_constraintTop_toTopOf="parent"
+        app:menu="@menu/menu_text_selection_popup"
+        app:title="@string/app_name" />
 
     <com.github.barteksc.pdfviewer.PDFView
         android:id="@+id/pdfView"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:background="@color/black"
-        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/searchResultNavigationLayout"
         app:layout_constraintTop_toBottomOf="@id/main_toolbar" />
 
     <com.github.barteksc.pdfviewer.PDocSelection
         android:id="@+id/docSelection"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/main_toolbar" />
+        app:layout_constraintBottom_toBottomOf="@id/pdfView"
+        app:layout_constraintEnd_toEndOf="@id/pdfView"
+        app:layout_constraintStart_toStartOf="@id/pdfView"
+        app:layout_constraintTop_toTopOf="@id/pdfView" />
 
-    <View
-        android:id="@+id/anchor_view"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        android:background="#55000000"
+
+    <LinearLayout
+        android:id="@+id/searchResultNavigationLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingHorizontal="@dimen/padding_16dp"
+        android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/main_toolbar" />
+        tools:visibility="visible">
+
+        <ImageButton
+            android:id="@+id/closeSearchBtn"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:background="@null"
+            android:contentDescription="@string/close"
+            android:src="@drawable/ic_action_close" />
+
+        <TextView
+            android:id="@+id/searchMatchedTextView"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_weight="1"
+            android:maxLines="1"
+            android:textAlignment="center"
+            android:textColor="?attr/colorOnBackground"
+            android:textSize="20sp"
+            tools:text="1 of 100" />
+
+        <ImageButton
+            android:id="@+id/navigatePrevBtn"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:background="@null"
+            android:contentDescription="@string/close_search"
+            android:src="@drawable/navigate_before" />
+
+        <ImageButton
+            android:id="@+id/navigateNextBtn"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:background="@null"
+            android:contentDescription="@string/close_search"
+            android:src="@drawable/navigate_next" />
+
+    </LinearLayout>
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/openFile"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_margin="16dp"
+        android:contentDescription="@string/load_pdf"
+        android:src="@drawable/baseline_picture_as_pdf_24"
+        app:layout_constraintBottom_toTopOf="@id/searchResultNavigationLayout"
+        app:layout_constraintEnd_toEndOf="parent" />
 
 
 </androidx.constraintlayout.widget.ConstraintLayout>

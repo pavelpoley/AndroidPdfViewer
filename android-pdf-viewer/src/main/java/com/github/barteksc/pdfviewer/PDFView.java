@@ -41,6 +41,7 @@ import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.HandlerThread;
+import android.text.TextUtils;
 import android.util.ArrayMap;
 import android.util.AttributeSet;
 import android.util.DisplayMetrics;
@@ -491,16 +492,18 @@ public class PDFView extends RelativeLayout {
     }
 
     // Search methods
-    public void search(String text) {
+    public void search(@Nullable String text) {
         searchMatchedCount = 0;
         currentMatchedWordIndex = 0;
         searchRecords.clear();
         currentFocusedSearchItem = null;
         index = -1;
-        setIsSearching(true);
         if (task != null) {
             closeTask();
         }
+        if (TextUtils.isEmpty(text)) return;
+
+        setIsSearching(true);
         task = new PDocSearchTask(this, text);
         task.start();
     }
@@ -714,7 +717,7 @@ public class PDFView extends RelativeLayout {
         if (record == null) return List.of();
         int page = record.pageIdx;
         long tid = dragPinchManager.prepareText(page);
-        if (record.data == null && tid != -1) {
+        if (record.data == null && tid != -1 && task != null) {
             ArrayList<SearchRecordItem> data = new ArrayList<>();
             record.data = data;
             long keyStr = task.getKeyStr();
@@ -730,7 +733,7 @@ public class PDFView extends RelativeLayout {
                 }
             }
         }
-        return record.data;
+        return record.data == null ? List.of() : record.data;
     }
 
     private void getRectForRecordItem(ArrayList<SearchRecordItem> data, int st, int ed, int page) {

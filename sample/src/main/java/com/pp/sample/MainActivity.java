@@ -6,18 +6,25 @@ import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.RectF;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.text.TextUtils;
+import android.util.Log;
 import android.view.Gravity;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.PopupWindow;
-import android.widget.SearchView;
 import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.SearchView;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
@@ -38,6 +45,15 @@ public class MainActivity extends AppCompatActivity {
 
     private PopupWindow popupWindow;
     private LayoutMenuPopupTextSelectionBinding menuBinding;
+    ActivityResultLauncher<String> launcher = registerForActivityResult(
+            new ActivityResultContracts.GetContent(), this::loadPdf);
+
+
+    private int currentSearchItemIndex = 0;
+    private int totalSearchItems = 0;
+
+    private SearchView searchView;
+    private MenuItem searchMenuItem;
 
 
     @SuppressLint("NewApi")
@@ -48,14 +64,106 @@ public class MainActivity extends AppCompatActivity {
         binding = ActivityMainBinding.inflate(getLayoutInflater(), null, false);
         setContentView(binding.getRoot());
         ViewCompat.setOnApplyWindowInsetsListener(binding.main, (v, insets) -> {
-            Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
+            Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.ime());
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
             return insets;
         });
 
         PDFView pdfView = binding.pdfView;
-        pdfView.fromAsset("sample.pdf")
-                .scrollHandle(new DefaultScrollHandle(this))
+        loadPdf(null);
+
+        binding.mainToolbar.setOnCreateContextMenuListener((menu, v, menuInfo) -> {
+            Log.d(TAG, "onCreate: " + menu);
+        });
+
+        setSupportActionBar(binding.mainToolbar);
+        binding.navigateNextBtn.setOnClickListener(v -> {
+            if (pdfView.navigateToNextSearchItem()) {
+                currentSearchItemIndex++;
+                updateSearchNavigation();
+            }
+        });
+        binding.navigatePrevBtn.setOnClickListener(v -> {
+            if (pdfView.navigateToPreviousSearchItem()) {
+                currentSearchItemIndex--;
+                updateSearchNavigation();
+            }
+        });
+        pdfView.setSelectionPaintView(binding.docSelection);
+
+        binding.closeSearchBtn.setOnClickListener(v -> resetAndCloseSearchView());
+        binding.openFile.setOnClickListener(v -> launcher.launch("application/pdf"));
+    }
+
+    private void updateSearchNavigation() {
+        binding.searchMatchedTextView.setText(getString(
+                R.string.search_navigation_placeholder,
+                totalSearchItems == 0 ? 0 : currentSearchItemIndex + 1,
+                totalSearchItems
+        ));
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.menu_text_selection_popup, menu);
+        MenuItem item = menu.findItem(R.id.search_menu_item);
+        View actionView = item.getActionView();
+        if (actionView instanceof SearchView) {
+            setupSearchView((SearchView) actionView, item);
+        }
+        return true;
+    }
+
+    private void setupSearchView(SearchView searchView, MenuItem menuItem) {
+        this.searchView = searchView;
+        this.searchMenuItem = menuItem;
+        searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
+            @Override
+            public boolean onQueryTextSubmit(String query) {
+                showSearchNavigation();
+                binding.pdfView.search(query);
+                if (TextUtils.isEmpty(query)) {
+                    hideSearchNavigation();
+                }
+                updateSearchNavigation();
+                return true;
+            }
+
+            @Override
+            public boolean onQueryTextChange(String newText) {
+                return false;
+            }
+        });
+        searchView.setOnCloseListener(() -> {
+            binding.pdfView.clearSearch();
+            hideSearchNavigation();
+            return false;
+        });
+    }
+
+    private void hideSearchNavigation() {
+        binding.searchResultNavigationLayout.setVisibility(View.GONE);
+    }
+
+    private void showSearchNavigation() {
+        currentSearchItemIndex = 0;
+        totalSearchItems = 0;
+        binding.searchResultNavigationLayout.setVisibility(View.VISIBLE);
+    }
+
+    private void resetAndCloseSearchView() {
+        if (searchView == null || searchMenuItem == null) return;
+        searchView.setQuery("", false);
+        searchView.clearFocus();
+        searchMenuItem.collapseActionView();
+    }
+
+    private void loadPdf(Uri uri) {
+        resetAndCloseSearchView();
+        PDFView.Configurator configurator = (uri == null ?
+                binding.pdfView.fromAsset("sample.pdf")
+                : binding.pdfView.fromUri(uri)
+        ).scrollHandle(new DefaultScrollHandle(this))
                 .enableSwipe(true)
                 .swipeHorizontal(false)
                 .enableDoubleTap(true)
@@ -65,28 +173,15 @@ public class MainActivity extends AppCompatActivity {
                 .spacing(10)
                 .onSelection(this::onTextSelected)
                 .onSelectionInProgress(this::hidePopupMenu)
+                .onSearchMatch((page, totalMatched, word) -> {
+                    totalSearchItems += totalMatched;
+                    updateSearchNavigation();
+                })
                 .onTap(e -> {
                     hidePopupMenu();
                     return true;
-                })
-                .load();
-        binding.searchPdf.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
-            @Override
-            public boolean onQueryTextSubmit(String query) {
-                pdfView.search(query);
-                binding.searchPdf.clearFocus();
-                return true;
-            }
-
-            @Override
-            public boolean onQueryTextChange(String newText) {
-                return false;
-            }
-        });
-        binding.next.setOnClickListener(v -> pdfView.navigateToNextSearchItem());
-        binding.prev.setOnClickListener(v -> pdfView.navigateToPreviousSearchItem());
-
-        pdfView.setSelectionPaintView(binding.docSelection);
+                });
+        configurator.load();
     }
 
 
