@@ -2080,6 +2080,8 @@ public class PDFView extends RelativeLayout {
         private boolean pageSnap = false;
 
         private boolean nightMode = false;
+        private float contrast = 1f;
+        private float brightness = 1f;
 
         private View hideView = null;
 
@@ -2267,6 +2269,14 @@ public class PDFView extends RelativeLayout {
             return this;
         }
 
+        public Configurator nightMode(boolean nightMode, float brightness, float contrast) {
+            this.nightMode = nightMode;
+            this.brightness = brightness;
+            this.contrast = contrast;
+            return this;
+        }
+
+
         public Configurator disableLongPress() {
             PDFView.this.dragPinchManager.disableLongPress();
             return this;
@@ -2304,6 +2314,9 @@ public class PDFView extends RelativeLayout {
             PDFView.this.callbacks.setLinkHandler(linkHandler);
             PDFView.this.setSwipeEnabled(enableSwipe);
             PDFView.this.setNightMode(nightMode);
+            if (brightness != 1f && contrast != 1f) {
+                PDFView.this.setNightMode(nightMode, brightness, contrast);
+            }
             PDFView.this.enableDoubleTap(enableDoubleTap);
             PDFView.this.setDefaultPage(defaultPage);
             PDFView.this.setSwipeVertical(!swipeHorizontal);
