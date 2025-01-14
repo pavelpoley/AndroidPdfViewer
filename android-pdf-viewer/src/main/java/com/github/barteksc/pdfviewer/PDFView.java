@@ -973,6 +973,10 @@ public class PDFView extends RelativeLayout {
     }
 
     public void setNightMode(boolean nightMode, float brightnessScale, float contrastScale) {
+        if (brightnessScale == 1f && contrastScale == 1f) {
+            setNightMode(nightMode);
+            return;
+        }
         this.nightMode = nightMode;
         if (nightMode) {
             // Invert colors
@@ -2313,8 +2317,9 @@ public class PDFView extends RelativeLayout {
             PDFView.this.callbacks.setOnPageError(onPageErrorListener);
             PDFView.this.callbacks.setLinkHandler(linkHandler);
             PDFView.this.setSwipeEnabled(enableSwipe);
-            PDFView.this.setNightMode(nightMode);
-            if (brightness != 1f && contrast != 1f) {
+            if (brightness == 1f && contrast == 1f) {
+                PDFView.this.setNightMode(nightMode);
+            } else {
                 PDFView.this.setNightMode(nightMode, brightness, contrast);
             }
             PDFView.this.enableDoubleTap(enableDoubleTap);
