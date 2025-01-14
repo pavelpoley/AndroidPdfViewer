@@ -9,8 +9,7 @@ android {
 
     defaultConfig {
         minSdkVersion 23
-        //noinspection OldTargetApi
-        targetSdkVersion 34
+        targetSdkVersion 35
     }
     buildTypes {
         release {
