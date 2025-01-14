@@ -21,7 +21,6 @@ import static com.github.barteksc.pdfviewer.util.Constants.Pinch.MINIMUM_ZOOM;
 import android.annotation.SuppressLint;
 import android.graphics.PointF;
 import android.graphics.RectF;
-import android.graphics.drawable.Drawable;
 import android.util.Log;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
@@ -47,6 +46,12 @@ import java.util.ArrayList;
 
 @SuppressWarnings("unused")
 class DragPinchManager implements GestureDetector.OnGestureListener, GestureDetector.OnDoubleTapListener, ScaleGestureDetector.OnScaleGestureListener, View.OnTouchListener {
+
+
+    private enum DraggingState {
+        START, END, NONE
+    }
+
     private static final String TAG = "DragPinchManager";
     float lastX;
     float lastY;
@@ -54,7 +59,9 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
     float orgY;
     private static final Object lock = new Object();
 
-    Drawable currentSelectionHandle;
+
+    @NonNull
+    private DraggingState draggingState = DraggingState.NONE;
     float lineHeight;
 
     float view_pager_toguard_lastX;
@@ -157,6 +164,7 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
     }
 
 
+    @SuppressWarnings("SameParameterValue")
     private boolean wordTapped(float x, float y, float totalFactor) {
         PdfFile pdfFile = pdfView.pdfFile;
         if (pdfFile == null) {
@@ -224,9 +232,6 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
                 int tmp = selSt;
                 selSt = selEd;
                 selEd = tmp;
-
-                pdfView.draggingHandle = currentSelectionHandle == pdfView.startSelectionHandle
-                        ? pdfView.endSelectionHandle : pdfView.startSelectionHandle;
             }
             selEd -= selSt;
             if (selEd > 0) {
@@ -439,7 +444,7 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
         }
         if (wordTapped(e.getX(), e.getY(), 2.5f)) {
             pdfView.hasSelection = true;
-            currentSelectionHandle = null;
+            draggingState = DraggingState.NONE;
             sCursorPosStart.set(pdfView.handleRightPos.right, pdfView.handleRightPos.bottom);
             pdfView.callbacks.callIsTextSelectionInProgress();
         }
@@ -568,10 +573,10 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
             orgY = view_pager_toguard_lastY = lastY;
             if (pdfView.hasSelection) {
                 if (paintView.startHandleRectF.contains(event.getX(), event.getY())) {
-                    currentSelectionHandle = pdfView.startSelectionHandle;
+                    draggingState = DraggingState.START;
                     sCursorPosStart.set(pdfView.handleLeftPos.left, pdfView.handleLeftPos.bottom);
                 } else if (paintView.endHandleRectF.contains(event.getX(), event.getY())) {
-                    currentSelectionHandle = pdfView.endSelectionHandle;
+                    draggingState = DraggingState.END;
                     sCursorPosStart.set(pdfView.handleRightPos.right, pdfView.handleRightPos.bottom);
                 }
             }
@@ -586,8 +591,8 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
     }
 
     private void stopTextSelection() {
-        if (currentSelectionHandle != null) {
-            currentSelectionHandle = null;
+        if (draggingState != DraggingState.NONE) {
+            draggingState = DraggingState.NONE;
         }
         pdfView.selectionPaintView.dismissMagnifier();
         int startSelectedIndex = pdfView.selStart;
@@ -605,13 +610,13 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
     }
 
     private void dragHandle(float x, float y) {
-        if (currentSelectionHandle != null) {
+        if (draggingState != DraggingState.NONE) {
 
             pdfView.selectionPaintView.showMagnifier(x, y);
 
             pdfView.startInDrag = true;
 
-            boolean isStart = (currentSelectionHandle == pdfView.startSelectionHandle);
+            boolean isStart = (draggingState == DraggingState.START);
 
             // Determine the appropriate line height based on the handle being dragged
             lineHeight = isStart ? pdfView.lineHeightStart : pdfView.lineHeightEnd;

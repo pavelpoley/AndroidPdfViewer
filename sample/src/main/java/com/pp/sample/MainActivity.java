@@ -5,6 +5,7 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Color;
 import android.graphics.RectF;
 import android.net.Uri;
 import android.os.Bundle;
@@ -73,6 +74,7 @@ public class MainActivity extends AppCompatActivity {
         loadPdf(null);
 
         binding.mainToolbar.setOnCreateContextMenuListener((menu, v, menuInfo) -> {
+            // Inflate the menu layout
             Log.d(TAG, "onCreate: " + menu);
         });
 
@@ -90,6 +92,19 @@ public class MainActivity extends AppCompatActivity {
             }
         });
         pdfView.setSelectionPaintView(binding.docSelection);
+        binding.docSelection
+                .modifySelectionUi()
+                .updateSelectionPaint(paint -> {
+                    paint.setColor(Color.RED);
+                })
+                .updateEndDragHandleDrawable(drawable -> {
+                    drawable.setColorFilter(Color.YELLOW, android.graphics.PorterDuff.Mode.SRC_IN);
+                })
+                .updateStartDragHandleDrawable(drawable -> {
+
+                })
+                .apply();
+
 
         binding.closeSearchBtn.setOnClickListener(v -> resetAndCloseSearchView());
         binding.openFile.setOnClickListener(v -> launcher.launch("application/pdf"));

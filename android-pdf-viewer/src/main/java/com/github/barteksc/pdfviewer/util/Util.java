@@ -16,7 +16,8 @@
 package com.github.barteksc.pdfviewer.util;
 
 import android.content.Context;
-import android.util.TypedValue;
+
+import androidx.core.util.TypedValueCompat;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -26,12 +27,19 @@ import java.util.List;
 public class Util {
     private static final int DEFAULT_BUFFER_SIZE = 1024 * 4;
 
-    public static int getDP(Context context, int dp) {
-        return (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, dp, context.getResources().getDisplayMetrics());
+    public static int dpToPx(Context context, int dpValue) {
+        return (int) TypedValueCompat.dpToPx(dpValue, context.getResources().getDisplayMetrics());
     }
-    public static boolean indexExists(final List list, final int index) {
+
+    public static float dpToPx(Context context, float dpValue) {
+        return TypedValueCompat.dpToPx(dpValue, context.getResources().getDisplayMetrics());
+    }
+
+    public static <T> boolean indexExists(final List<T> list, final int index) {
         return index >= 0 && index < list.size();
-    } public static boolean indexExists(  int count, final int index) {
+    }
+
+    public static boolean indexExists(int count, final int index) {
         return index >= 0 && index < count;
     }
 

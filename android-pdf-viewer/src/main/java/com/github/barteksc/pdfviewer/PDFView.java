@@ -24,7 +24,6 @@ import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
-import android.graphics.ColorFilter;
 import android.graphics.ColorMatrix;
 import android.graphics.ColorMatrixColorFilter;
 import android.graphics.Matrix;
@@ -32,8 +31,6 @@ import android.graphics.Paint;
 import android.graphics.Paint.Style;
 import android.graphics.PaintFlagsDrawFilter;
 import android.graphics.PointF;
-import android.graphics.PorterDuff;
-import android.graphics.PorterDuffColorFilter;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
@@ -54,7 +51,6 @@ import android.widget.RelativeLayout;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
-import androidx.core.content.res.ResourcesCompat;
 
 import com.github.barteksc.pdfviewer.exception.PageRenderingException;
 import com.github.barteksc.pdfviewer.link.DefaultLinkHandler;
@@ -131,8 +127,7 @@ public class PDFView extends RelativeLayout {
     float lineHeightStart;
     float lineHeightEnd;
     private static final String TAG = PDFView.class.getSimpleName();
-    final RectF handleLeftPos = new RectF();
-    final RectF handleRightPos = new RectF();
+    final RectF handleLeftPos = new RectF(), handleRightPos = new RectF();
     boolean hasSelection;
     public boolean isSearching;
     public boolean startInDrag;
@@ -143,16 +138,13 @@ public class PDFView extends RelativeLayout {
 
 
     final Matrix matrix = new Matrix();
-    Drawable startSelectionHandle;
-    Drawable endSelectionHandle;
-    Drawable draggingHandle;
-    private float minZoom = MINIMUM_ZOOM;
-    private float midZoom = (MINIMUM_ZOOM + MAXIMUM_ZOOM) / 2;
-    private float maxZoom = MAXIMUM_ZOOM;
+
+    private float minZoom = MINIMUM_ZOOM,
+            midZoom = (MINIMUM_ZOOM + MAXIMUM_ZOOM) / 2,
+            maxZoom = MAXIMUM_ZOOM;
     public DisplayMetrics dm;
     private final double cos = 1;//Math.cos(0);
     private final double sin = 0;//Math.sin(0);
-    float drawableScale = 1.f;
     final Map<Integer, SearchRecord> searchRecords = new ArrayMap<>();
 
     SearchRecordItem currentFocusedSearchItem = null;
@@ -232,9 +224,6 @@ public class PDFView extends RelativeLayout {
         selectionPaintView = sv;
         sv.pdfView = this;
         sv.resetSel();
-        sv.drawableWidth = Util.getDP(getContext(), (int) sv.drawableWidth) * drawableScale;
-        sv.drawableHeight = Util.getDP(getContext(), (int) sv.drawableHeight) * drawableScale;
-        sv.drawableDeltaW = sv.drawableWidth / 4;
     }
 
 
@@ -435,17 +424,27 @@ public class PDFView extends RelativeLayout {
      * Construct the initial view
      */
 
+    public PDFView(Context context) {
+        super(context);
+        init(context);
+    }
 
-    public PDFView(Context context, AttributeSet set) {
-        super(context, set);
+    public PDFView(Context context, AttributeSet attrs) {
+        super(context, attrs);
+        init(context);
+    }
+
+    public PDFView(Context context, AttributeSet attrs, int defaultStyle) {
+        super(context, attrs, defaultStyle);
+        init(context);
+    }
+
+    private void init(Context context) {
         scrollDir = ScrollDir.NONE;
-
         renderingHandlerThread = new HandlerThread("PDF renderer");
-
         if (isInEditMode()) {
             return;
         }
-
         cacheManager = new CacheManager();
         animationManager = new AnimationManager(this);
         dragPinchManager = new DragPinchManager(this, animationManager);
@@ -460,7 +459,6 @@ public class PDFView extends RelativeLayout {
         mResource = getResources();
         dm = mResource.getDisplayMetrics();
         display.getMetrics(dm);
-        initSelection();
         setWillNotDraw(false);
     }
 
@@ -614,7 +612,7 @@ public class PDFView extends RelativeLayout {
         return rectFS;
     }
 
-    public void setSelectionAtPage(int pageIdx, int st, int ed) {
+    void setSelectionAtPage(int pageIdx, int st, int ed) {
         selPageSt = pageIdx;
         selPageEd = pageIdx;
         selStart = st;
@@ -764,19 +762,6 @@ public class PDFView extends RelativeLayout {
         return 0;
     }
 
-    void initSelection() {
-        startSelectionHandle = ResourcesCompat.getDrawable(getResources(),
-                R.drawable.abc_text_select_handle_left_mtrl_dark, null);
-        endSelectionHandle = ResourcesCompat.getDrawable(getResources(),
-                R.drawable.abc_text_select_handle_right_mtrl_dark, null);
-        ColorFilter colorFilter = new PorterDuffColorFilter(0XDD309AFE, PorterDuff.Mode.SRC_IN);
-        ColorFilter colorFilterEnd = new PorterDuffColorFilter(0XDDbbcc02, PorterDuff.Mode.SRC_IN);
-        startSelectionHandle.setColorFilter(colorFilter);
-        endSelectionHandle.setColorFilter(colorFilterEnd);
-        startSelectionHandle.setAlpha(255);
-        endSelectionHandle.setAlpha(255);
-        float moveSlop = 1.6f;
-    }
 
     private void load(DocumentSource docSource, String password) {
         load(docSource, password, null);
@@ -1906,15 +1891,15 @@ public class PDFView extends RelativeLayout {
     }
 
     private void setSpacing(int spacingDp) {
-        this.spacingPx = Util.getDP(getContext(), spacingDp);
+        this.spacingPx = Util.dpToPx(getContext(), spacingDp);
     }
 
     private void setSpacingTop(int spacingTopDp) {
-        this.spacingTopPx = Util.getDP(getContext(), spacingTopDp);
+        this.spacingTopPx = Util.dpToPx(getContext(), spacingTopDp);
     }
 
     private void setSpacingBottom(int spacingBottomDp) {
-        this.spacingBottomPx = Util.getDP(getContext(), spacingBottomDp);
+        this.spacingBottomPx = Util.dpToPx(getContext(), spacingBottomDp);
     }
 
     private void setAutoSpacing(boolean autoSpacing) {
@@ -2287,6 +2272,13 @@ public class PDFView extends RelativeLayout {
             return this;
         }
 
+
+        /**
+         * Loads the pdf using configurator
+         * Make sure to setSelectionPaintView(PDocSelection) before calling load()
+         *
+         * @see PDFView#setSelectionPaintView(PDocSelection)
+         */
         public void load() {
             if (!hasSize) {
                 waitingDocumentConfigurator = this;
@@ -2328,6 +2320,10 @@ public class PDFView extends RelativeLayout {
             PDFView.this.setPageFling(pageFling);
             PDFView.this.setOnScrollHideView(hideView);
 
+            if (selectionPaintView == null) {
+                throw new IllegalArgumentException("Did you forget to PDFView#setSelectionPaintView(PDocSelection)?");
+            }
+
             if (pageNumbers != null) {
                 PDFView.this.load(documentSource, password, pageNumbers);
             } else {
@@ -2335,4 +2331,6 @@ public class PDFView extends RelativeLayout {
             }
         }
     }
+
+
 }
