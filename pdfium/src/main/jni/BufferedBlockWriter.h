@@ -1,7 +1,5 @@
 #ifndef _BBW_
-#define _BBW_
 #include "../include/fpdf_save.h"
-#include "../../../../../../../Library/Android/sdk/ndk/21.1.6352462/toolchains/llvm/prebuilt/darwin-x86_64/lib64/clang/9.0.8/include/opencl-c-base.h"
 
 
 class DocumentFile {
@@ -30,7 +28,7 @@ struct PdfToFdWriter : FPDF_FILEWRITE {
 
 void flushBuffer(int fd);
 
-bool writeAllBytes(const int fd, const void *buffer, const size_t byteCount);
+bool writeAllBytes(int fd, const void *buffer, size_t byteCount);
 
 int writeBlock(FPDF_FILEWRITE* owner, const void* buffer, unsigned long size);
 

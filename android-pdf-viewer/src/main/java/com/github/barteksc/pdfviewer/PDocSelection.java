@@ -3,22 +3,30 @@ package com.github.barteksc.pdfviewer;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.ColorFilter;
 import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.PorterDuff;
+import android.graphics.PorterDuffColorFilter;
 import android.graphics.PorterDuffXfermode;
 import android.graphics.RectF;
+import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.View;
 import android.widget.Magnifier;
 
+import androidx.annotation.ColorInt;
+import androidx.annotation.DrawableRes;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.content.res.ResourcesCompat;
+import androidx.core.util.Consumer;
 
 import com.github.barteksc.pdfviewer.model.SearchRecord;
 import com.github.barteksc.pdfviewer.model.SearchRecordItem;
+import com.github.barteksc.pdfviewer.util.Util;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -33,18 +41,22 @@ public class PDocSelection extends View {
     private static final String TAG = "PDocSelection";
     private Magnifier magnifier;
 
+    private PDocSelectionConfig config;
+
 
     public boolean suppressRecalculateInvalidate;
     PDFView pdfView;
-    float drawableWidth = 60;
-    float drawableHeight = 30;
-    float drawableDeltaW = drawableWidth / 4;
-    private Paint rectPaint;
-    Paint searchedFocusedPaint;
-    Paint rectHighlightPaint;
+    private float dragHandleHeight;
+    private float dragHandleWidth;
+    private Paint selectionPaint;
+    private Paint searchedFocusedSelectionPaint;
+    private Paint searchedSelectionPaint;
 
     RectF startHandleRectF;
     RectF endHandleRectF;
+
+    private Drawable startSelectionHandle;
+    private Drawable endSelectionHandle;
 
     /**
      * output image
@@ -77,23 +89,39 @@ public class PDocSelection extends View {
                     .setInitialZoom(3f)
                     .build();
         }
-        rectPaint = new Paint();
         startHandleRectF = new RectF();
         endHandleRectF = new RectF();
 
-        rectPaint.setColor(0X66109AFE);
         PorterDuffXfermode xfermode = new PorterDuffXfermode(PorterDuff.Mode.DARKEN);
-        rectPaint.setXfermode(xfermode);
-
-        rectHighlightPaint = new Paint();
-        rectHighlightPaint.setColor(Color.YELLOW);
-        rectHighlightPaint.setXfermode(xfermode);
 
 
-        searchedFocusedPaint = new Paint();
-        searchedFocusedPaint.setColor(0X660000FF);
-        searchedFocusedPaint.setXfermode(xfermode);
+        selectionPaint = new Paint();
+        selectionPaint.setColor(0X66109AFE);
+        selectionPaint.setXfermode(xfermode);
+
+        searchedSelectionPaint = new Paint();
+        searchedSelectionPaint.setColor(Color.YELLOW);
+        searchedSelectionPaint.setXfermode(xfermode);
+
+
+        searchedFocusedSelectionPaint = new Paint();
+        searchedFocusedSelectionPaint.setColor(0X660000FF);
+        searchedFocusedSelectionPaint.setXfermode(xfermode);
+        dragHandleHeight = Util.dpToPx(getContext(), 32);
+        dragHandleWidth = Util.dpToPx(getContext(), 32);
+
+        startSelectionHandle = ResourcesCompat.getDrawable(getResources(),
+                R.drawable.abc_text_select_handle_left_mtrl_dark, getContext().getTheme());
+        endSelectionHandle = ResourcesCompat.getDrawable(getResources(),
+                R.drawable.abc_text_select_handle_right_mtrl_dark, getContext().getTheme());
+
+        ColorFilter colorFilter = new PorterDuffColorFilter(0XDD309AFE, PorterDuff.Mode.SRC_IN);
+        ColorFilter colorFilterEnd = new PorterDuffColorFilter(0XDDbbcc02, PorterDuff.Mode.SRC_IN);
+        startSelectionHandle.setColorFilter(colorFilter);
+        endSelectionHandle.setColorFilter(colorFilterEnd);
+        config = PDocSelectionConfig.getInstance(this);
     }
+
 
     private final int[] viewPosition = new int[2];
 
@@ -287,29 +315,30 @@ public class PDocSelection extends View {
                         canvas.save();
                         canvas.concat(matrix);
                         VR.set(0, 0, bmWidth, bmHeight);
-                        canvas.drawRect(VR, rectPaint);
+                        canvas.drawRect(VR, selectionPaint);
 
                         //draw start and right drag handle
-                        float handleSize = 88 / pdfView.getZoom();
+                        float handleSizeW = dragHandleWidth / pdfView.getZoom();
+                        float handleSizeH = dragHandleHeight / pdfView.getZoom();
                         if (j == 0) {
-                            int left = (int) (VR.left - handleSize);
+                            int left = (int) (VR.left - handleSizeW);
                             int top = (int) VR.bottom;
                             int right = (int) VR.left;
-                            int bottom = (int) (VR.bottom + handleSize);
-                            pdfView.startSelectionHandle.setBounds(left, top, right, bottom);
+                            int bottom = (int) (VR.bottom + handleSizeH);
+                            startSelectionHandle.setBounds(left, top, right, bottom);
                             startHandleRectF.set(left, top, right, bottom);
                             matrix.mapRect(startHandleRectF);
-                            pdfView.startSelectionHandle.draw(canvas);
+                            startSelectionHandle.draw(canvas);
                         }
                         if (j == rectPage.size() - 1) {
                             int left = (int) (VR.right);
                             int top = (int) VR.bottom;
-                            int right = (int) (VR.right + handleSize);
-                            int bottom = (int) (VR.bottom + handleSize);
-                            pdfView.endSelectionHandle.setBounds(left, top, right, bottom);
+                            int right = (int) (VR.right + handleSizeW);
+                            int bottom = (int) (VR.bottom + handleSizeH);
+                            endSelectionHandle.setBounds(left, top, right, bottom);
                             endHandleRectF.set(left, top, right, bottom);
                             matrix.mapRect(endHandleRectF);
-                            pdfView.endSelectionHandle.draw(canvas);
+                            endSelectionHandle.draw(canvas);
                         }
                         canvas.restore();
                     }
@@ -336,7 +365,7 @@ public class PDocSelection extends View {
                     canvas.save();
                     canvas.concat(matrix);
                     VR.set(0, 0, bmWidth, bmHeight);
-                    canvas.drawRect(VR, pdfView.currentFocusedSearchItem == searchRecordItem ? searchedFocusedPaint : rectHighlightPaint);
+                    canvas.drawRect(VR, pdfView.currentFocusedSearchItem == searchRecordItem ? searchedFocusedSelectionPaint : searchedSelectionPaint);
                     canvas.restore();
                 }
             }
@@ -355,4 +384,291 @@ public class PDocSelection extends View {
         }
         return null;
     }
+
+    /**
+     * The `PDocSelectionConfig` class follows a "Deferred Configuration Pattern" (a variation of the Builder Pattern),
+     * allowing users to configure properties of a `PDocSelection` instance incrementally.
+     * <p>
+     * Configurations are staged in temporary variables and applied to the actual instance only when {@link #apply()} is called.
+     * This ensures that no partial changes are applied prematurely, promoting immutability during configuration.
+     */
+    public static class PDocSelectionConfig {
+        private static PDocSelectionConfig getInstance(PDocSelection selection) {
+            return new PDocSelectionConfig(selection);
+        }
+
+        private final PDocSelection selection;
+        private Consumer<Paint> selectionPaintConsumer;
+        private Consumer<Paint> searchedSelectionConsumer;
+        private Consumer<Paint> focusedSearchedConsumer;
+
+        private Drawable tempStartSelectionHandle;
+        private Consumer<Drawable> startDragConsumer;
+
+        private Drawable tempEndSelectionHandle;
+        private Consumer<Drawable> endDargConsumer;
+
+        private float tempDragHandleWidth;
+        private float tempDragHandleHeight;
+
+        private PDocSelectionConfig(PDocSelection selection) {
+            this.selection = selection;
+            this.tempStartSelectionHandle = selection.startSelectionHandle;
+            this.tempEndSelectionHandle = selection.endSelectionHandle;
+            this.tempDragHandleWidth = selection.dragHandleWidth;
+            this.tempDragHandleHeight = selection.dragHandleHeight;
+        }
+
+
+        public PDocSelectionConfig setEndSelectionHandleColor(@ColorInt int color) {
+            if (tempEndSelectionHandle != null) {
+                tempEndSelectionHandle.setColorFilter(new PorterDuffColorFilter(color, PorterDuff.Mode.SRC_IN));
+            }
+            return this;
+        }
+
+        public PDocSelectionConfig setStartSelectionHandleColor(@ColorInt int color) {
+            if (tempStartSelectionHandle != null) {
+                tempStartSelectionHandle.setColorFilter(new PorterDuffColorFilter(color, PorterDuff.Mode.SRC_IN));
+            }
+            return this;
+        }
+
+        public PDocSelectionConfig setSelectionHandleColor(@ColorInt int color) {
+            return setStartSelectionHandleColor(color)
+                    .setEndSelectionHandleColor(color);
+
+        }
+
+
+        public PDocSelectionConfig setDragHandleSizeDp(int widthDpValue, int heightDpValue) {
+            this.tempDragHandleWidth = Util.dpToPx(selection.getContext(), (float) widthDpValue);
+            this.tempDragHandleHeight = Util.dpToPx(selection.getContext(), (float) heightDpValue);
+            return this;
+        }
+
+        public PDocSelectionConfig setDragHandleSize(float widthPx, float heightPx) {
+            this.tempDragHandleWidth = widthPx;
+            this.tempDragHandleHeight = heightPx;
+            return this;
+        }
+
+        public PDocSelectionConfig setDragHandleHeightDp(int dpValue) {
+            this.tempDragHandleHeight = Util.dpToPx(selection.getContext(), (float) dpValue);
+            return this;
+        }
+
+        public PDocSelectionConfig setDragHandleHeight(float pixels) {
+            this.tempDragHandleHeight = pixels;
+            return this;
+        }
+
+        public PDocSelectionConfig setDragHandleWidthDp(int dpValue) {
+            this.tempDragHandleWidth = Util.dpToPx(selection.getContext(), (float) dpValue);
+            return this;
+        }
+
+        public PDocSelectionConfig setDragHandleWidth(float pixels) {
+            this.tempDragHandleWidth = pixels;
+            return this;
+        }
+
+        public PDocSelectionConfig setEndSelectionDragHandle(Drawable endSelectionHandle) {
+            this.tempEndSelectionHandle = endSelectionHandle;
+            return this;
+        }
+
+        public PDocSelectionConfig setEndSelectionDragHandle(@DrawableRes int resId) {
+            this.tempEndSelectionHandle = ResourcesCompat.getDrawable(selection.getResources(),
+                    resId, selection.getContext().getTheme());
+            return this;
+        }
+
+        public PDocSelectionConfig setStartSelectionHandle(Drawable startSelectionHandle) {
+            this.tempStartSelectionHandle = startSelectionHandle;
+            return this;
+        }
+
+        public PDocSelectionConfig setStartSelectionHandle(@DrawableRes int resId) {
+            this.tempStartSelectionHandle = ResourcesCompat.getDrawable(selection.getResources(),
+                    resId, selection.getContext().getTheme());
+            return this;
+        }
+
+        /**
+         * Updates the paint configuration for the selection.
+         * This method accepts a consumer function that modifies the selection paint.
+         * <p>
+         * Example usage:
+         * <pre>
+         * PDocSelectionConfig config = new PDocSelectionConfig();
+         * config.updateSelectionPaint(paint -> paint.setColor(Color.RED));
+         * </pre>
+         * This will set the selection paint color to red.
+         *
+         * @param paintConsumer A consumer that accepts a {@link Paint} object and modifies it.
+         * @return The current {@link PDocSelectionConfig} instance, allowing for method chaining.
+         */
+        public PDocSelectionConfig updateSelectionPaint(Consumer<Paint> paintConsumer) {
+            this.selectionPaintConsumer = paintConsumer;
+            return this;
+        }
+
+        /**
+         * Updates the paint configuration for the searched selection.
+         * This method accepts a consumer function that modifies the searched selection paint.
+         * <p>
+         * Example usage:
+         * <pre>
+         * PDocSelectionConfig config = ...
+         * config.updateSearchedSelectionPaint(paint -> paint.setAlpha(128));
+         * </pre>
+         * This will set the searched selection paint to have 50% transparency.
+         *
+         * @param paintConsumer A consumer that accepts a {@link Paint} object and modifies it.
+         * @return The current {@link PDocSelectionConfig} instance, allowing for method chaining.
+         */
+        public PDocSelectionConfig updateSearchedSelectionPaint(Consumer<Paint> paintConsumer) {
+            this.searchedSelectionConsumer = paintConsumer;
+            return this;
+        }
+
+        /**
+         * Updates the paint configuration for the searched focused selection.
+         * This method accepts a consumer function that modifies the searched focused selection paint.
+         * <p>
+         * Example usage:
+         * <pre>
+         * PDocSelectionConfig config = ...
+         * config.updateSearchedFocusedSelectionPaint(paint -> paint.setStyle(Paint.Style.STROKE));
+         * </pre>
+         * This will set the searched focused selection paint style to stroke.
+         *
+         * @param paintConsumer A consumer that accepts a {@link Paint} object and modifies it.
+         * @return The current {@link PDocSelectionConfig} instance, allowing for method chaining.
+         */
+        public PDocSelectionConfig updateSearchedFocusedSelectionPaint(Consumer<Paint> paintConsumer) {
+            this.focusedSearchedConsumer = paintConsumer;
+            return this;
+        }
+
+        /**
+         * Updates the drawable configuration for the start drag handle.
+         * This method accepts a consumer function that modifies the drawable used for the start drag handle.
+         * <p>
+         * Example usage:
+         * <pre>
+         * PDocSelectionConfig config = ...
+         * config.updateStartDragHandleDrawable(drawable -> drawable.setTint(Color.BLUE));
+         * </pre>
+         * This will set the start drag handle drawable tint color to blue.
+         *
+         * @param drawableConsumer A consumer that accepts a {@link Drawable} object and modifies it.
+         * @return The current {@link PDocSelectionConfig} instance, allowing for method chaining.
+         */
+        public PDocSelectionConfig updateStartDragHandleDrawable(Consumer<Drawable> drawableConsumer) {
+            this.startDragConsumer = drawableConsumer;
+            return this;
+        }
+
+        /**
+         * Updates the drawable configuration for the end drag handle.
+         * This method accepts a consumer function that modifies the drawable used for the end drag handle.
+         * <p>
+         * Example usage:
+         * <pre>
+         * PDocSelectionConfig config = ...
+         * config.updateEndDragHandleDrawable(drawable -> drawable.setTint(Color.GREEN));
+         * </pre>
+         * This will set the end drag handle drawable tint color to green.
+         *
+         * @param drawableConsumer A consumer that accepts a {@link Drawable} object and modifies it.
+         * @return The current {@link PDocSelectionConfig} instance, allowing for method chaining.
+         */
+        public PDocSelectionConfig updateEndDragHandleDrawable(Consumer<Drawable> drawableConsumer) {
+            this.endDargConsumer = drawableConsumer;
+            return this;
+        }
+
+
+        /**
+         * Applies all the pending configurations to the selection instance.
+         * <p>
+         * This method applies various configuration changes to the {@link PDocSelection} instance, including
+         * the start and end selection handles, drag handle dimensions, and any registered consumers
+         * that modify the appearance or behavior of the selection. Consumers are applied last, after the
+         * selection attributes are updated.
+         * </p>
+         *
+         * The order of operations is as follows:
+         * 1. Setters are applied.
+         * 2. The consumers (if they are non-null) are invoked to further modify the attributes.
+         * 3. Finally, the selection is invalidated (typically causing a redraw or refresh).
+         * <p>
+         * Example:
+         * <pre>
+         *     PDocSelectionConfig config = pDocSelection.modifySelectionUi();
+         *     .updateSelectionPaint(paint -> paint.setColor(Color.RED))
+         *     .updateStartDragHandleDrawable(drawable -> drawable.setTint(Color.BLUE))
+         *     .apply();
+         * </pre>
+         * In this example:
+         * 1. The selection paint color is set to red.
+         * 2. The start drag handle drawable's tint color is set to blue.
+         * After calling {@link  #apply()}, the changes are applied to the {@link PDocSelection} instance.
+         * </pre>
+         */
+        public void apply() {
+            selection.startSelectionHandle = this.tempStartSelectionHandle;
+            selection.endSelectionHandle = this.tempEndSelectionHandle;
+            selection.dragHandleWidth = this.tempDragHandleWidth;
+            selection.dragHandleHeight = this.tempDragHandleHeight;
+            applyLambda();
+            selection.invalidate();
+        }
+
+        private void applyLambda() {
+            if (selectionPaintConsumer != null) {
+                selectionPaintConsumer.accept(selection.selectionPaint);
+            }
+            if (searchedSelectionConsumer != null) {
+                searchedSelectionConsumer.accept(selection.searchedSelectionPaint);
+            }
+            if (focusedSearchedConsumer != null) {
+                focusedSearchedConsumer.accept(selection.searchedFocusedSelectionPaint);
+            }
+            if (startDragConsumer != null) {
+                startDragConsumer.accept(tempStartSelectionHandle);
+            }
+            if (endDargConsumer != null) {
+                endDargConsumer.accept(tempEndSelectionHandle);
+            }
+        }
+    }
+
+    /**
+     * Provides access to the configuration object for modifying the UI of the `PDocSelection`.
+     * <p>
+     * This method returns the `PDocSelectionConfig` instance, allowing users to customize various
+     * aspects of the selection UI, such as paint colors, handle sizes, and handle drawables.
+     * The actual changes are applied to the `PDocSelection` instance only when {@link PDocSelectionConfig#apply()} is invoked.
+     * <p>
+     * Example usage:
+     * <pre>
+     *     pDocSelection.modifySelectionUi()
+     *                  .updateSelectionPaint(paint->{
+     *                      paint.setColor(Color.RED);
+     *                      paint.setXFrameMode(null); // clears default mode
+     *                  })
+     *                  .setDragHandleSizeDp(20, 30)
+     *                  .apply();
+     * </pre>
+     *
+     * @return the `PDocSelectionConfig` instance for configuring the selection UI
+     */
+    public PDocSelectionConfig modifySelectionUi() {
+        return config;
+    }
+
+
 }

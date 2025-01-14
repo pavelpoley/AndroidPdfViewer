@@ -77,7 +77,7 @@ public class DefaultScrollHandle extends RelativeLayout implements ScrollHandle 
 
         setBackground(background);
 
-        LayoutParams lp = new LayoutParams(Util.getDP(context, width), Util.getDP(context, height));
+        LayoutParams lp = new LayoutParams(Util.dpToPx(context, width), Util.dpToPx(context, height));
         lp.setMargins(0, 0, 0, 0);
 
         LayoutParams tvlp = new LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -122,8 +122,8 @@ public class DefaultScrollHandle extends RelativeLayout implements ScrollHandle 
 
         if (pos < 0) {
             pos = 0;
-        } else if (pos > pdfViewSize - Util.getDP(context, HANDLE_SHORT)) {
-            pos = pdfViewSize - Util.getDP(context, HANDLE_SHORT);
+        } else if (pos > pdfViewSize - Util.dpToPx(context, HANDLE_SHORT)) {
+            pos = pdfViewSize - Util.dpToPx(context, HANDLE_SHORT);
         }
 
         if (pdfView.isSwipeVertical()) {
