@@ -505,7 +505,7 @@ public class PDFView extends RelativeLayout {
         if (TextUtils.isEmpty(text)) return;
 
         setIsSearching(true);
-        task = new PDocSearchTask(this, text);
+        task = new PDocSearchTask(this, text.trim());
         task.start();
     }
 

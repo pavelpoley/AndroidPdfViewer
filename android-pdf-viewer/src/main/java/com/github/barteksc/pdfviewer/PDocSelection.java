@@ -314,12 +314,11 @@ public class PDocSelection extends View {
                         pdfView.setMatrixArray(pdfView.srcArray, 0, 0, bmWidth, 0, bmWidth, bmHeight, 0, bmHeight);
                         pdfView.setMatrixArray(pdfView.dstArray, VR.left, VR.top, VR.right, VR.top, VR.right, VR.bottom, VR.left, VR.bottom);
                         matrix.setPolyToPoly(pdfView.srcArray, 0, pdfView.dstArray, 0, 4);
-                        canvas.save();
+                        int savePoint = canvas.save();
                         canvas.concat(matrix);
                         VR.set(0, 0, bmWidth, bmHeight);
                         canvas.drawRect(VR, selectionPaint);
 
-                        //draw start and right drag handle
                         float handleSizeW = dragHandleWidth / pdfView.getZoom();
                         float handleSizeH = dragHandleHeight / pdfView.getZoom();
                         if (j == 0) {
@@ -341,12 +340,12 @@ public class PDocSelection extends View {
                             endHandleRectF.set(left, top, right, bottom);
                             matrix.mapRect(endHandleRectF);
                             endSelectionHandle.draw(canvas);
-                            canvas.restore();
-                            canvas.save();
+                            canvas.restoreToCount(savePoint);
+                            savePoint = canvas.save();
                             canvas.concat(startDragHandleMatrix);
                             startSelectionHandle.draw(canvas);
                         }
-                        canvas.restore();
+                        canvas.restoreToCount(savePoint);
                     }
                 }
             }
@@ -605,7 +604,7 @@ public class PDocSelection extends View {
          * that modify the appearance or behavior of the selection. Consumers are applied last, after the
          * selection attributes are updated.
          * </p>
-         *
+         * <p>
          * The order of operations is as follows:
          * 1. Setters are applied.
          * 2. The consumers (if they are non-null) are invoked to further modify the attributes.
