@@ -2354,32 +2354,5 @@ public class PDFView extends RelativeLayout {
     }
 
 
-    @SuppressLint("NewApi")
-    public void getImageObjects(int pageIndex, Executor executor) {
-        long textPtr = pdfFile.getTextPage(pageIndex);
-        long pagePtr;
-        try {
-            pagePtr = pdfFile.openPage(pageIndex);
-        } catch (PageRenderingException e) {
-            return;
-        }
-
-        var objects = pdfiumCore.getTextImages(pagePtr, textPtr);
-        if (objects == null) {
-            return;
-        }
-
-        objects.stream().forEach(e ->
-                Log.d(TAG, "getImageObjects: "
-                        + (e.bitmap != null ? "Bitmap(" + e.bitmap.getWidth() + "x" + e.bitmap.getHeight() + ")" :
-                        e.text)));
-
-        for (TextImage object : objects) {
-            if (object != null && object.bitmap != null) {
-                object.bitmap.recycle();
-            }
-        }
-    }
-
 
 }

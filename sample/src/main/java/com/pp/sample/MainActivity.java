@@ -12,7 +12,6 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.TextUtils;
-import android.util.Log;
 import android.view.Gravity;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -35,10 +34,7 @@ import com.github.barteksc.pdfviewer.scroll.DefaultScrollHandle;
 import com.pp.sample.databinding.ActivityMainBinding;
 import com.pp.sample.databinding.LayoutMenuPopupTextSelectionBinding;
 
-import java.util.concurrent.Executor;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-
+@SuppressWarnings("unused")
 public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "MainActivity";
@@ -94,12 +90,8 @@ public class MainActivity extends AppCompatActivity {
         pdfView.setSelectionPaintView(binding.docSelection);
         binding.docSelection
                 .modifySelectionUi()
-                .updateSelectionPaint(paint -> {
-                    paint.setColor(Color.RED);
-                })
-                .updateEndDragHandleDrawable(drawable -> {
-                    drawable.setColorFilter(Color.YELLOW, android.graphics.PorterDuff.Mode.SRC_IN);
-                })
+                .updateSelectionPaint(paint -> paint.setColor(Color.RED))
+                .updateEndDragHandleDrawable(drawable -> drawable.setColorFilter(Color.YELLOW, android.graphics.PorterDuff.Mode.SRC_IN))
                 .updateStartDragHandleDrawable(drawable -> {
 
                 })
@@ -193,19 +185,11 @@ public class MainActivity extends AppCompatActivity {
                     totalSearchItems += totalMatched;
                     updateSearchNavigation();
                 })
-                .onLoad(this::onPdfLoad)
                 .onTap(e -> {
                     hidePopupMenu();
                     return true;
                 });
         configurator.load();
-    }
-
-    ExecutorService executor = Executors.newSingleThreadExecutor();
-
-    private void onPdfLoad(int totalPdfPages) {
-        Log.d(TAG, "onPdfLoad: " + totalPdfPages);
-        binding.pdfView.getImageObjects(0, executor);
     }
 
 
@@ -243,7 +227,6 @@ public class MainActivity extends AppCompatActivity {
     protected void onDestroy() {
         binding = null;
         menuBinding = null;
-        executor.shutdown();
         super.onDestroy();
     }
 

@@ -283,6 +283,8 @@ public class PDocSelection extends View {
         }
     }
 
+    private final Matrix startDragHandleMatrix = new Matrix();
+
     @Override
     protected void onDraw(@NonNull Canvas canvas) {
         if (pdfView == null) {
@@ -328,7 +330,7 @@ public class PDocSelection extends View {
                             startSelectionHandle.setBounds(left, top, right, bottom);
                             startHandleRectF.set(left, top, right, bottom);
                             matrix.mapRect(startHandleRectF);
-                            startSelectionHandle.draw(canvas);
+                            startDragHandleMatrix.set(matrix);
                         }
                         if (j == rectPage.size() - 1) {
                             int left = (int) (VR.right);
@@ -339,6 +341,10 @@ public class PDocSelection extends View {
                             endHandleRectF.set(left, top, right, bottom);
                             matrix.mapRect(endHandleRectF);
                             endSelectionHandle.draw(canvas);
+                            canvas.restore();
+                            canvas.save();
+                            canvas.concat(startDragHandleMatrix);
+                            startSelectionHandle.draw(canvas);
                         }
                         canvas.restore();
                     }
