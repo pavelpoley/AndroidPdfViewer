@@ -17,12 +17,15 @@ package com.github.barteksc.pdfviewer.util;
 
 import android.content.Context;
 
+import androidx.annotation.NonNull;
 import androidx.core.util.TypedValueCompat;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 public class Util {
     private static final int DEFAULT_BUFFER_SIZE = 1024 * 4;
@@ -52,4 +55,8 @@ public class Util {
         }
         return os.toByteArray();
     }
+
+
+
+
 }

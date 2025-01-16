@@ -35,6 +35,10 @@ import com.github.barteksc.pdfviewer.scroll.DefaultScrollHandle;
 import com.pp.sample.databinding.ActivityMainBinding;
 import com.pp.sample.databinding.LayoutMenuPopupTextSelectionBinding;
 
+import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
 public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "MainActivity";
@@ -73,10 +77,6 @@ public class MainActivity extends AppCompatActivity {
         PDFView pdfView = binding.pdfView;
         loadPdf(null);
 
-        binding.mainToolbar.setOnCreateContextMenuListener((menu, v, menuInfo) -> {
-            // Inflate the menu layout
-            Log.d(TAG, "onCreate: " + menu);
-        });
 
         setSupportActionBar(binding.mainToolbar);
         binding.navigateNextBtn.setOnClickListener(v -> {
@@ -108,6 +108,7 @@ public class MainActivity extends AppCompatActivity {
 
         binding.closeSearchBtn.setOnClickListener(v -> resetAndCloseSearchView());
         binding.openFile.setOnClickListener(v -> launcher.launch("application/pdf"));
+
     }
 
     private void updateSearchNavigation() {
@@ -192,11 +193,19 @@ public class MainActivity extends AppCompatActivity {
                     totalSearchItems += totalMatched;
                     updateSearchNavigation();
                 })
+                .onLoad(this::onPdfLoad)
                 .onTap(e -> {
                     hidePopupMenu();
                     return true;
                 });
         configurator.load();
+    }
+
+    ExecutorService executor = Executors.newSingleThreadExecutor();
+
+    private void onPdfLoad(int totalPdfPages) {
+        Log.d(TAG, "onPdfLoad: " + totalPdfPages);
+        binding.pdfView.getImageObjects(0, executor);
     }
 
 
@@ -234,6 +243,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onDestroy() {
         binding = null;
         menuBinding = null;
+        executor.shutdown();
         super.onDestroy();
     }
 
