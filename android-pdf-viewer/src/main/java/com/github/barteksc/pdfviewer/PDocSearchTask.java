@@ -85,7 +85,7 @@ public class PDocSearchTask implements Runnable {
 
     public void abort() {
         abort.set(true);
-        PdfiumCore.nativeReleaseStringChars(key, keyStr);
+        PdfiumCore.nativeReleaseStringChars(keyStr);
     }
 
     public boolean isAborted() {

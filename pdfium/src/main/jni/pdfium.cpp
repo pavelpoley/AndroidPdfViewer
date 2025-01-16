@@ -992,14 +992,34 @@ JNI_FUNC(jint, PdfiumCore, nativeGetFindLength)(JNI_ARGS, jlong searchPtr) {
     return FPDFText_GetSchCount((FPDF_SCHHANDLE) searchPtr);
 }
 
+#include <cstring>
+
 JNI_FUNC(jlong, PdfiumCore, nativeGetStringChars)(JNI_ARGS, jstring key) {
-    //LOGE("fatal nativeGetStringChars %ld", (long)key);
-    return (long) env->GetStringChars(key, nullptr);
+    if (key == nullptr) {
+        return 0;
+    }
+    const jchar* chars = env->GetStringChars(key, nullptr);
+    if (chars == nullptr) {
+        return 0;
+    }
+    jsize length = env->GetStringLength(key);
+#pragma clang diagnostic push
+#pragma ide diagnostic ignored "MemoryLeak"
+    auto* nativeChars = new jchar[length];
+#pragma clang diagnostic pop
+    std::memcpy(nativeChars, chars, length * sizeof(jchar));
+    env->ReleaseStringChars(key, chars);
+    return reinterpret_cast<jlong>(nativeChars);
 }
 
-JNI_FUNC(void, PdfiumCore, nativeReleaseStringChars)(JNI_ARGS, jstring key, jlong keyPtr) {
-    env->ReleaseStringChars(key, reinterpret_cast<const jchar *>(keyPtr));
+JNI_FUNC(void, PdfiumCore, nativeReleaseStringChars)(JNI_ARGS, jlong keyPtr) {
+    if (keyPtr == 0) {
+        return;
+    }
+    auto* nativeChars = reinterpret_cast<jchar*>(keyPtr);
+    delete[] nativeChars;
 }
+
 
 
 JNI_FUNC(jint, PdfiumCore, nativeFindTextPage)(JNI_ARGS, jlong textPtr, jstring key, jint flag) {

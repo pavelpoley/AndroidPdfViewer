@@ -91,8 +91,8 @@ public class PdfiumCore {
     public native int nativeGetMixedLooseCharPos(long pagePtr, int offsetY, int offsetX, int width, int height, RectF pt, long tid, int index, boolean loose);
 
 
-  /*For escape// private native long nativeGetNativeWindow(Surface surface);
-    private native void nativeRenderPage(long pagePtr, long nativeWindowPtr);*/
+    /*For escape// private native long nativeGetNativeWindow(Surface surface);
+      private native void nativeRenderPage(long pagePtr, long nativeWindowPtr);*/
     private native void nativeRenderPage(long pagePtr, Surface surface, int dpi,
                                          int startX, int startY,
                                          int drawSizeHor, int drawSizeVer,
@@ -164,7 +164,7 @@ public class PdfiumCore {
 
     public static native long nativeGetStringChars(String key);
 
-    public static native void nativeReleaseStringChars(String key, long stringCharPtr);
+    public static native void nativeReleaseStringChars(long stringCharPtr);
 
     private native Point nativePageCoordsToDevice(long pagePtr, int startX, int startY, int sizeX,
                                                   int sizeY, int rotate, double pageX, double pageY);
