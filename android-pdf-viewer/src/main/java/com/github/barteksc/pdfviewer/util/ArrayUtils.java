@@ -20,7 +20,17 @@ import androidx.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 
+@SuppressWarnings("unused")
 public class ArrayUtils {
+
+
+    private static final ArrayList<?> EMPTY_ARRAY_LIST = new ArrayList<>();
+
+    @SuppressWarnings("unchecked")
+    public static <T> ArrayList<T> emptyArrayList() {
+        return (ArrayList<T>) EMPTY_ARRAY_LIST;
+    }
+
 
     private ArrayUtils() {
         // Prevents instantiation
