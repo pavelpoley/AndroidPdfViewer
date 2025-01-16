@@ -8,6 +8,7 @@ import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+@SuppressWarnings("unused")
 public class PDocSearchTask implements Runnable {
 
     private static final String TAG = "PDocSearchTask";
@@ -24,9 +25,10 @@ public class PDocSearchTask implements Runnable {
     private boolean finished;
 
     public PDocSearchTask(PDFView pdfView, String key) {
+        var trimmedQuery = key.trim();
         this.pdfViewRef = new WeakReference<>(pdfView);
-        this.key = key + "\0";
-        this.query = key;
+        this.key = trimmedQuery + "\0";
+        this.query = trimmedQuery;
     }
 
     public long getKeyStr() {
@@ -83,6 +85,7 @@ public class PDocSearchTask implements Runnable {
 
     public void abort() {
         abort.set(true);
+        PdfiumCore.nativeReleaseStringChars(key, keyStr);
     }
 
     public boolean isAborted() {

@@ -89,7 +89,6 @@ import com.github.barteksc.pdfviewer.util.SnapEdge;
 import com.github.barteksc.pdfviewer.util.Util;
 import com.vivlio.android.pdfium.PdfDocument;
 import com.vivlio.android.pdfium.PdfiumCore;
-import com.vivlio.android.pdfium.TextImage;
 import com.vivlio.android.pdfium.util.Size;
 import com.vivlio.android.pdfium.util.SizeF;
 
@@ -100,8 +99,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.Executor;
-import java.util.stream.Collectors;
 
 /**
  * It supports animations, zoom, cache, and swipe.
@@ -505,7 +502,7 @@ public class PDFView extends RelativeLayout {
         if (TextUtils.isEmpty(text)) return;
 
         setIsSearching(true);
-        task = new PDocSearchTask(this, text.trim());
+        task = new PDocSearchTask(this, text);
         task.start();
     }
 
@@ -637,7 +634,7 @@ public class PDFView extends RelativeLayout {
         float xPreRotate = sourceToViewX(sx);
         float yPreRotate = sourceToViewY(sy);
         vTarget.set(xPreRotate, yPreRotate);
-       /* if (rotation == 0f) {
+       /* //if (rotation == 0f) {
 
         } else {
             // Calculate offset by rotation
@@ -759,7 +756,7 @@ public class PDFView extends RelativeLayout {
     }
 
     public int getLateralOffset() {
-        //if(size.getWidth()!=maxPageWidth) {
+        ////if(size.getWidth()!=maxPageWidth) {
         //	return (maxPageWidth-size.getWidth())/2;
         //}
         return 0;
@@ -949,13 +946,16 @@ public class PDFView extends RelativeLayout {
     }
 
     public SearchRecord findPageCached(String key, int pageIdx, int flag) {
-        long tid = dragPinchManager.loadText(pageIdx);
-        if (tid == -1) {
+        try {
+            long tid = dragPinchManager.loadText(pageIdx);
+            if (tid == -1) {
+                return null;
+            }
+            int foundIdx = pdfiumCore.nativeFindTextPage(tid, key, flag);
+            return foundIdx == -1 ? null : new SearchRecord(pageIdx, foundIdx);
+        } catch (Exception ex) {
             return null;
         }
-        int foundIdx = pdfiumCore.nativeFindTextPage(tid, key, flag);
-
-        return foundIdx == -1 ? null : new SearchRecord(pageIdx, foundIdx);
     }
 
     public void setNightMode(boolean nightMode) {
@@ -1040,6 +1040,7 @@ public class PDFView extends RelativeLayout {
     @SuppressWarnings("deprecation")
     public void recycle() {
         waitingDocumentConfigurator = null;
+        closeTask();
 
         animationManager.stopAll();
         dragPinchManager.disable();
@@ -2352,7 +2353,6 @@ public class PDFView extends RelativeLayout {
             }
         }
     }
-
 
 
 }

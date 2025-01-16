@@ -996,6 +996,12 @@ JNI_FUNC(jlong, PdfiumCore, nativeGetStringChars)(JNI_ARGS, jstring key) {
     //LOGE("fatal nativeGetStringChars %ld", (long)key);
     return (long) env->GetStringChars(key, nullptr);
 }
+
+JNI_FUNC(void, PdfiumCore, nativeReleaseStringChars)(JNI_ARGS, jstring key, jlong keyPtr) {
+    env->ReleaseStringChars(key, reinterpret_cast<const jchar *>(keyPtr));
+}
+
+
 JNI_FUNC(jint, PdfiumCore, nativeFindTextPage)(JNI_ARGS, jlong textPtr, jstring key, jint flag) {
     const unsigned short *keyStr = env->GetStringChars(key, nullptr);
     auto text = (FPDF_TEXTPAGE) textPtr;

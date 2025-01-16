@@ -22,6 +22,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
+@SuppressWarnings("unused")
 public class PdfiumCore {
 
 
@@ -89,8 +90,9 @@ public class PdfiumCore {
 
     public native int nativeGetMixedLooseCharPos(long pagePtr, int offsetY, int offsetX, int width, int height, RectF pt, long tid, int index, boolean loose);
 
-    //private native long nativeGetNativeWindow(Surface surface);
-    //private native void nativeRenderPage(long pagePtr, long nativeWindowPtr);
+
+  /*For escape// private native long nativeGetNativeWindow(Surface surface);
+    private native void nativeRenderPage(long pagePtr, long nativeWindowPtr);*/
     private native void nativeRenderPage(long pagePtr, Surface surface, int dpi,
                                          int startX, int startY,
                                          int drawSizeHor, int drawSizeVer,
@@ -162,6 +164,8 @@ public class PdfiumCore {
 
     public static native long nativeGetStringChars(String key);
 
+    public static native void nativeReleaseStringChars(String key, long stringCharPtr);
+
     private native Point nativePageCoordsToDevice(long pagePtr, int startX, int startY, int sizeX,
                                                   int sizeY, int rotate, double pageX, double pageY);
 
@@ -171,6 +175,9 @@ public class PdfiumCore {
     private static Field mFdField = null;
     private final int mCurrentDpi;
 
+    /**
+     * @noinspection JavaReflectionMemberAccess
+     */
     @SuppressLint("DiscouragedPrivateApi")
     public static int getNumFd(ParcelFileDescriptor fdObj) {
         try {
@@ -223,6 +230,10 @@ public class PdfiumCore {
             document.mNativeDocPtr = nativeOpenDocument(getNumFd(fd), password);
         }
 
+        if (document.mNativeDocPtr == 0) {
+            throw new IOException("Cannot open document");
+        }
+
         return document;
     }
 
@@ -241,11 +252,14 @@ public class PdfiumCore {
         synchronized (lock) {
             document.mNativeDocPtr = nativeOpenMemDocument(data, password);
         }
+        if (document.mNativeDocPtr == 0) {
+            throw new IOException("Cannot open document");
+        }
         return document;
     }
 
     /**
-     * Get total numer of pages in document
+     * Get total number of pages in document
      */
     public int getPageCount(PdfDocument doc) {
         synchronized (lock) {
@@ -369,14 +383,14 @@ public class PdfiumCore {
         synchronized (lock) {
             try {
                 //nativeRenderPage(doc.mNativePagesPtr.get(pageIndex), surface, mCurrentDpi);
-                nativeRenderPage(doc.mNativePagesPtr.get(pageIndex), surface, mCurrentDpi,
+                Long pagePtr = doc.mNativePagesPtr.get(pageIndex);
+                if (pagePtr == null) return;
+                nativeRenderPage(pagePtr, surface, mCurrentDpi,
                         startX, startY, drawSizeX, drawSizeY, renderAnnot);
             } catch (NullPointerException e) {
                 Log.e(TAG, "mContext may be null");
-                e.printStackTrace();
             } catch (Exception e) {
                 Log.e(TAG, "Exception throw from native");
-                e.printStackTrace();
             }
         }
     }
