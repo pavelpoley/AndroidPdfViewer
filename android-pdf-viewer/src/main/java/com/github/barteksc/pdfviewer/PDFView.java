@@ -89,6 +89,7 @@ import com.github.barteksc.pdfviewer.util.SnapEdge;
 import com.github.barteksc.pdfviewer.util.Util;
 import com.vivlio.android.pdfium.PdfDocument;
 import com.vivlio.android.pdfium.PdfiumCore;
+import com.vivlio.android.pdfium.TextImage;
 import com.vivlio.android.pdfium.util.Size;
 import com.vivlio.android.pdfium.util.SizeF;
 
@@ -99,6 +100,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.Executor;
+import java.util.stream.Collectors;
 
 /**
  * It supports animations, zoom, cache, and swipe.
@@ -2346,6 +2349,34 @@ public class PDFView extends RelativeLayout {
                 PDFView.this.load(documentSource, password, pageNumbers);
             } else {
                 PDFView.this.load(documentSource, password);
+            }
+        }
+    }
+
+
+    @SuppressLint("NewApi")
+    public void getImageObjects(int pageIndex, Executor executor) {
+        long textPtr = pdfFile.getTextPage(pageIndex);
+        long pagePtr;
+        try {
+            pagePtr = pdfFile.openPage(pageIndex);
+        } catch (PageRenderingException e) {
+            return;
+        }
+
+        var objects = pdfiumCore.getTextImages(pagePtr, textPtr);
+        if (objects == null) {
+            return;
+        }
+
+        objects.stream().forEach(e ->
+                Log.d(TAG, "getImageObjects: "
+                        + (e.bitmap != null ? "Bitmap(" + e.bitmap.getWidth() + "x" + e.bitmap.getHeight() + ")" :
+                        e.text)));
+
+        for (TextImage object : objects) {
+            if (object != null && object.bitmap != null) {
+                object.bitmap.recycle();
             }
         }
     }

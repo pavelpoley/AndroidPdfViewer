@@ -102,14 +102,14 @@ public class PdfDocument {
         }
     }
 
-    /*package*/ PdfDocument() {
+    PdfDocument() {
     }
 
-    /*package*/public long mNativeDocPtr;
-    /*package*/ ParcelFileDescriptor parcelFileDescriptor;
+    public long mNativeDocPtr;
+    ParcelFileDescriptor parcelFileDescriptor;
 
-    /*package*/public final Map<Integer, Long> mNativePagesPtr = new ArrayMap<>();
-    /*package*/public final Map<Integer, Long> mNativeTextPtr = new ArrayMap<>();
+    public final Map<Integer, Long> mNativePagesPtr = new ArrayMap<>();
+    public final Map<Integer, Long> mNativeTextPtr = new ArrayMap<>();
 
     public boolean hasPage(int index) {
         return mNativePagesPtr.containsKey(index);

@@ -29,7 +29,6 @@ import android.view.View;
 
 import androidx.annotation.NonNull;
 
-import com.github.barteksc.pdfviewer.exception.PageRenderingException;
 import com.github.barteksc.pdfviewer.model.LinkTapEvent;
 import com.github.barteksc.pdfviewer.scroll.ScrollHandle;
 import com.github.barteksc.pdfviewer.util.SnapEdge;
@@ -310,28 +309,7 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
     public long loadText(int page) {
         try {
             if (pdfView.pdfFile == null) return 0L;
-            synchronized (lock) {
-                if (!pdfView.pdfFile.pdfDocument.hasPage(page)) {
-                    try {
-                        pdfView.pdfFile.openPage(page);
-                    } catch (PageRenderingException e) {
-                        Log.e(TAG, "loadText", e);
-                    }
-                }
-                Long pagePtr = pdfView.pdfFile
-                        .pdfDocument
-                        .mNativePagesPtr.get(page);
-
-                if (pagePtr == null) {
-                    return 0L;
-                }
-                if (!pdfView.pdfFile.pdfDocument.hasText(page)) {
-                    long openTextPtr = pdfView.pdfiumCore.openText(pagePtr);
-                    pdfView.pdfFile.pdfDocument.mNativeTextPtr.put(page, openTextPtr);
-                }
-            }
-            Long l = pdfView.pdfFile.pdfDocument.mNativeTextPtr.get(page);
-            return l == null ? 0 : l;
+            return pdfView.pdfFile.getTextPage(page);
         } catch (Exception e) {
             return 0L;
         }

@@ -17,9 +17,9 @@
 #ifndef _LIBS_UTILS_MUTEX_H
 #define _LIBS_UTILS_MUTEX_H
 
-#include <stdint.h>
+#include <cstdint>
 #include <sys/types.h>
-#include <time.h>
+#include <ctime>
 
 #if defined(HAVE_PTHREADS)
 # include <pthread.h>

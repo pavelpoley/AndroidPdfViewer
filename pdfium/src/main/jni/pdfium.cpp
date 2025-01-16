@@ -14,14 +14,16 @@ extern "C" {
 #include <android/bitmap.h>
 #include <utils/Mutex.h>
 
-using namespace android;
 
 #include <fpdf_doc.h>
 #include <fpdfview.h>
 #include <fpdf_doc.h>
+#include <fpdf_edit.h>
 #include <string>
 #include <vector>
 #include <fpdf_text.h>
+
+using namespace android;
 
 static Mutex sLibraryLock;
 
@@ -61,6 +63,14 @@ public:
 
     DocumentFile() {
         initLibraryIfNeed();
+        fileSize = 0;
+        fileFd = 0;
+    }
+
+    explicit DocumentFile(int fileFd, size_t fileSize) {
+        initLibraryIfNeed();
+        this->fileSize = fileSize;
+        this->fileFd = fileFd;
     }
 
     ~DocumentFile();
@@ -118,6 +128,53 @@ static char *getErrorDescription(const long error) {
     }
 
     return description;
+}
+
+static bool init_classes = true;
+static jclass arrList;
+static jmethodID arrList_add;
+static jmethodID arrList_get;
+static jmethodID arrList_size;
+static jmethodID arrList_enssurecap;
+
+static jclass integer;
+[[maybe_unused]] static jmethodID integer_;
+
+static jclass rectF;
+static jmethodID rectF_;
+static jmethodID rectF_set;
+[[maybe_unused]] static jfieldID rectF_left;
+[[maybe_unused]] static jfieldID rectF_top;
+[[maybe_unused]] static jfieldID rectF_right;
+[[maybe_unused]] static jfieldID rectF_bottom;
+
+void initClasses(JNIEnv *env) {
+    LOGE("fatal initClasses");
+    jclass arrListTmp = env->FindClass("java/util/ArrayList");
+    arrList = (jclass) env->NewGlobalRef(arrListTmp);
+    env->DeleteLocalRef(arrListTmp);
+    arrList_add = env->GetMethodID(arrList, "add", "(Ljava/lang/Object;)Z");
+    arrList_get = env->GetMethodID(arrList, "get", "(I)Ljava/lang/Object;");
+    arrList_size = env->GetMethodID(arrList, "size", "()I");
+    arrList_enssurecap = env->GetMethodID(arrList, "ensureCapacity", "(I)V");
+
+    jclass integerTmp = env->FindClass("java/lang/Integer");
+    integer = (jclass) env->NewGlobalRef(integerTmp);
+    env->DeleteLocalRef(integerTmp);
+    integer_ = env->GetMethodID(integer, "<init>", "(I)V");
+
+    jclass rectFTmp = env->FindClass("android/graphics/RectF");
+    rectF = (jclass) env->NewGlobalRef(rectFTmp);
+    env->DeleteLocalRef(rectFTmp);
+    rectF_ = env->GetMethodID(rectF, "<init>", "(FFFF)V");
+    rectF_set = env->GetMethodID(rectF, "set", "(FFFF)V");
+    rectF_left = env->GetFieldID(rectF, "left", "F");
+    rectF_top = env->GetFieldID(rectF, "top", "F");
+    rectF_right = env->GetFieldID(rectF, "right", "F");
+    rectF_bottom = env->GetFieldID(rectF, "bottom", "F");
+
+
+    init_classes = false;
 }
 
 int jniThrowException(JNIEnv *env, const char *className, const char *message) {
@@ -180,7 +237,7 @@ extern "C" { //For JNI support
 static int getBlock(void *param, unsigned long position, unsigned char *outBuffer,
                     unsigned long size) {
     const int fd = reinterpret_cast<intptr_t>(param);
-    const int readCount = pread(fd, outBuffer, size, position);
+    const int readCount = pread(fd, outBuffer, size, (off_t) position);
     if (readCount < 0) {
         LOGE("Cannot read from file descriptor. Error:%d", errno);
         return 0;
@@ -188,6 +245,8 @@ static int getBlock(void *param, unsigned long position, unsigned char *outBuffe
     return 1;
 }
 
+#pragma clang diagnostic push
+#pragma ide diagnostic ignored "MemoryLeak"
 JNI_FUNC(jlong, PdfiumCore, nativeOpenDocument)(JNI_ARGS, jint fd, jstring password) {
 
     auto fileLength = (size_t) getFileSize(fd);
@@ -197,7 +256,7 @@ JNI_FUNC(jlong, PdfiumCore, nativeOpenDocument)(JNI_ARGS, jint fd, jstring passw
         return -1;
     }
 
-    auto *docFile = new DocumentFile();
+    auto *docFile = new DocumentFile(fd, fileLength);
 
     FPDF_FILEACCESS loader;
     loader.m_FileLen = fileLength;
@@ -233,31 +292,37 @@ JNI_FUNC(jlong, PdfiumCore, nativeOpenDocument)(JNI_ARGS, jint fd, jstring passw
     docFile->pdfDocument = document;
     return reinterpret_cast<jlong>(docFile);
 }
+#pragma clang diagnostic pop
 
+#pragma clang diagnostic push
+#pragma ide diagnostic ignored "MemoryLeak"
 JNI_FUNC(jlong, PdfiumCore, nativeOpenMemDocument)(JNI_ARGS, jbyteArray data, jstring password) {
-    DocumentFile *docFile = new DocumentFile();
+    auto *docFile = new DocumentFile();
 
-    const char *cpassword = NULL;
-    if (password != NULL) {
-        cpassword = env->GetStringUTFChars(password, NULL);
+    const char *cpassword = nullptr;
+    if (password != nullptr) {
+        cpassword = env->GetStringUTFChars(password, nullptr);
     }
 
-    jbyte *cData = env->GetByteArrayElements(data, NULL);
-    int size = (int) env->GetArrayLength(data);
-    jbyte *cDataCopy = new jbyte[size];
+    jbyte *cData = env->GetByteArrayElements(data, nullptr);
+    int size = env->GetArrayLength(data);
+    docFile->fileSize = size;
+
+
+    auto *cDataCopy = new jbyte[size];
     memcpy(cDataCopy, cData, size);
     FPDF_DOCUMENT document = FPDF_LoadMemDocument(reinterpret_cast<const void *>(cDataCopy),
                                                   size, cpassword);
     env->ReleaseByteArrayElements(data, cData, JNI_ABORT);
 
-    if (cpassword != NULL) {
+    if (cpassword != nullptr) {
         env->ReleaseStringUTFChars(password, cpassword);
     }
 
     if (!document) {
         delete docFile;
 
-        const long errorNum = FPDF_GetLastError();
+        const long errorNum = (long) FPDF_GetLastError();
         if (errorNum == FPDF_ERR_PASSWORD) {
             jniThrowException(env, "com/vivlio/android/pdfium/PdfPasswordException",
                               "Password required or incorrect password.");
@@ -276,34 +341,42 @@ JNI_FUNC(jlong, PdfiumCore, nativeOpenMemDocument)(JNI_ARGS, jbyteArray data, js
 
     return reinterpret_cast<jlong>(docFile);
 }
+#pragma clang diagnostic pop
 
-JNI_FUNC(jint, PdfiumCore, nativeGetPageCount)(JNI_ARGS, jlong documentPtr) {
-    DocumentFile *doc = reinterpret_cast<DocumentFile *>(documentPtr);
-    return (jint) FPDF_GetPageCount(doc->pdfDocument);
-}
 
 JNI_FUNC(void, PdfiumCore, nativeCloseDocument)(JNI_ARGS, jlong documentPtr) {
-    DocumentFile *doc = reinterpret_cast<DocumentFile *>(documentPtr);
+    auto *doc = reinterpret_cast<DocumentFile *>(documentPtr);
     delete doc;
 }
 
+JNI_FUNC(jint, PdfiumCore, nativeGetPageCount)(JNI_ARGS, jlong documentPtr) {
+    auto *doc = reinterpret_cast<DocumentFile *>(documentPtr);
+    return (jint) FPDF_GetPageCount(doc->pdfDocument);
+}
+
+JNI_FUNC(jlong, PdfiumCore, nativeFileSize)(JNI_ARGS, jlong documentPtr) {
+    auto *doc = reinterpret_cast<DocumentFile *>(documentPtr);
+    return doc->fileSize;
+}
+
+
 static jlong loadPageInternal(JNIEnv *env, DocumentFile *doc, int pageIndex) {
     try {
-        if (doc == NULL) throw "Get page document null";
+        if (doc == nullptr) throw std::runtime_error("Get page document null");
 
         FPDF_DOCUMENT pdfDoc = doc->pdfDocument;
-        if (pdfDoc != NULL) {
+        if (pdfDoc != nullptr) {
             FPDF_PAGE page = FPDF_LoadPage(pdfDoc, pageIndex);
-            if (page == NULL) {
-                throw "Loaded page is null";
+            if (page == nullptr) {
+                throw std::runtime_error("Loaded page is null");
             }
             return reinterpret_cast<jlong>(page);
         } else {
-            throw "Get page pdf document null";
+            throw std::runtime_error("Get page pdf document null");
         }
 
-    } catch (const char *msg) {
-        LOGE("%s", msg);
+    } catch (const std::exception &e) {
+        LOGE("%s", e.what());
 
         jniThrowException(env, "java/lang/IllegalStateException",
                           "cannot load page");
@@ -317,14 +390,14 @@ static void closePageInternal(jlong pagePtr) {
 }
 
 JNI_FUNC(jlong, PdfiumCore, nativeLoadPage)(JNI_ARGS, jlong docPtr, jint pageIndex) {
-    DocumentFile *doc = reinterpret_cast<DocumentFile *>(docPtr);
+    auto *doc = reinterpret_cast<DocumentFile *>(docPtr);
     return loadPageInternal(env, doc, (int) pageIndex);
 }
 JNI_FUNC(jlongArray, PdfiumCore, nativeLoadPages)(JNI_ARGS, jlong docPtr, jint fromIndex,
                                                   jint toIndex) {
-    DocumentFile *doc = reinterpret_cast<DocumentFile *>(docPtr);
+    auto *doc = reinterpret_cast<DocumentFile *>(docPtr);
 
-    if (toIndex < fromIndex) return NULL;
+    if (toIndex < fromIndex) return nullptr;
     jlong pages[toIndex - fromIndex + 1];
 
     int i;
@@ -341,37 +414,37 @@ JNI_FUNC(jlongArray, PdfiumCore, nativeLoadPages)(JNI_ARGS, jlong docPtr, jint f
 JNI_FUNC(void, PdfiumCore, nativeClosePage)(JNI_ARGS, jlong pagePtr) { closePageInternal(pagePtr); }
 JNI_FUNC(void, PdfiumCore, nativeClosePages)(JNI_ARGS, jlongArray pagesPtr) {
     int length = (int) (env->GetArrayLength(pagesPtr));
-    jlong *pages = env->GetLongArrayElements(pagesPtr, NULL);
+    jlong *pages = env->GetLongArrayElements(pagesPtr, nullptr);
 
     int i;
     for (i = 0; i < length; i++) { closePageInternal(pages[i]); }
 }
 
 JNI_FUNC(jint, PdfiumCore, nativeGetPageWidthPixel)(JNI_ARGS, jlong pagePtr, jint dpi) {
-    FPDF_PAGE page = reinterpret_cast<FPDF_PAGE>(pagePtr);
+    auto page = reinterpret_cast<FPDF_PAGE>(pagePtr);
     return (jint) (FPDF_GetPageWidth(page) * dpi / 72);
 }
 JNI_FUNC(jint, PdfiumCore, nativeGetPageHeightPixel)(JNI_ARGS, jlong pagePtr, jint dpi) {
-    FPDF_PAGE page = reinterpret_cast<FPDF_PAGE>(pagePtr);
+    auto page = reinterpret_cast<FPDF_PAGE>(pagePtr);
     return (jint) (FPDF_GetPageHeight(page) * dpi / 72);
 }
 JNI_FUNC(jint, PdfiumCore, nativeGetPageWidthPoint)(JNI_ARGS, jlong pagePtr) {
-    FPDF_PAGE page = reinterpret_cast<FPDF_PAGE>(pagePtr);
+    auto page = reinterpret_cast<FPDF_PAGE>(pagePtr);
     return (jint) FPDF_GetPageWidth(page);
 }
 JNI_FUNC(jint, PdfiumCore, nativeGetPageHeightPoint)(JNI_ARGS, jlong pagePtr) {
-    FPDF_PAGE page = reinterpret_cast<FPDF_PAGE>(pagePtr);
+    auto page = reinterpret_cast<FPDF_PAGE>(pagePtr);
     return (jint) FPDF_GetPageHeight(page);
 }
 JNI_FUNC(jobject, PdfiumCore, nativeGetPageSizeByIndex)(JNI_ARGS, jlong docPtr, jint pageIndex,
                                                         jint dpi) {
-    DocumentFile *doc = reinterpret_cast<DocumentFile *>(docPtr);
-    if (doc == NULL) {
+    auto *doc = reinterpret_cast<DocumentFile *>(docPtr);
+    if (doc == nullptr) {
         LOGE("Document is null");
 
         jniThrowException(env, "java/lang/IllegalStateException",
                           "Document is null");
-        return NULL;
+        return nullptr;
     }
 
     double width, height;
@@ -437,14 +510,18 @@ JNI_FUNC(void, PdfiumCore, nativeRenderPage)(JNI_ARGS, jlong pagePtr, jobject ob
                                              jint dpi, jint startX, jint startY,
                                              jint drawSizeHor, jint drawSizeVer,
                                              jboolean renderAnnot) {
+    if (!dpi) {
+        LOGD("NO DPI");
+    }
+
     ANativeWindow *nativeWindow = ANativeWindow_fromSurface(env, objSurface);
-    if (nativeWindow == NULL) {
+    if (nativeWindow == nullptr) {
         LOGE("native window pointer null");
         return;
     }
-    FPDF_PAGE page = reinterpret_cast<FPDF_PAGE>(pagePtr);
+    auto page = reinterpret_cast<FPDF_PAGE>(pagePtr);
 
-    if (page == NULL || nativeWindow == NULL) {
+    if (page == nullptr) {
         LOGE("Render page pointers invalid");
         return;
     }
@@ -459,7 +536,7 @@ JNI_FUNC(void, PdfiumCore, nativeRenderPage)(JNI_ARGS, jlong pagePtr, jobject ob
 
     ANativeWindow_Buffer buffer;
     int ret;
-    if ((ret = ANativeWindow_lock(nativeWindow, &buffer, NULL)) != 0) {
+    if ((ret = ANativeWindow_lock(nativeWindow, &buffer, nullptr)) != 0) {
         LOGE("Locking native window failed: %s", strerror(ret * -1));
         return;
     }
@@ -475,10 +552,10 @@ JNI_FUNC(void, PdfiumCore, nativeRenderPage)(JNI_ARGS, jlong pagePtr, jobject ob
 }
 
 JNI_FUNC(jstring, PdfiumCore, nativeGetLinkTarget)(JNI_ARGS, jlong docPtr, jlong linkPtr) {
-    DocumentFile *doc = reinterpret_cast<DocumentFile *>(docPtr);
-    FPDF_LINK link = reinterpret_cast<FPDF_LINK>(linkPtr);
+    auto *doc = reinterpret_cast<DocumentFile *>(docPtr);
+    auto link = reinterpret_cast<FPDF_LINK>(linkPtr);
     FPDF_DEST dest = FPDFLink_GetDest(doc->pdfDocument, link);
-    if (dest != NULL) {
+    if (dest != nullptr) {
         long pageIdx = FPDFDest_GetDestPageIndex(doc->pdfDocument, dest);
         char buffer[16] = {0};
         buffer[0] = '@';
@@ -486,12 +563,12 @@ JNI_FUNC(jstring, PdfiumCore, nativeGetLinkTarget)(JNI_ARGS, jlong docPtr, jlong
         return env->NewStringUTF(buffer);
     }
     FPDF_ACTION action = FPDFLink_GetAction(link);
-    if (action == NULL) {
-        return NULL;
+    if (action == nullptr) {
+        return nullptr;
     }
-    size_t bufferLen = FPDFAction_GetURIPath(doc->pdfDocument, action, NULL, 0);
+    size_t bufferLen = FPDFAction_GetURIPath(doc->pdfDocument, action, nullptr, 0);
     if (bufferLen <= 0) {
-        return NULL;
+        return nullptr;
     }
     std::string uri;
     FPDFAction_GetURIPath(doc->pdfDocument, action, WriteInto(&uri, bufferLen), bufferLen);
@@ -500,20 +577,26 @@ JNI_FUNC(jstring, PdfiumCore, nativeGetLinkTarget)(JNI_ARGS, jlong docPtr, jlong
 JNI_FUNC(jlong, PdfiumCore, nativeGetLinkAtCoord)(JNI_ARGS, jlong pagePtr, jdouble width,
                                                   jdouble height, jdouble posX, jdouble posY) {
     double px, py;
-    FPDF_DeviceToPage((FPDF_PAGE) pagePtr, 0, 0, width, height, 0, posX, posY, &px, &py);
+    FPDF_DeviceToPage((FPDF_PAGE) pagePtr, 0, 0, (int) width, (int) height, 0, (int) posX,
+                      (int) posY, &px,
+                      &py);
     return (jlong) FPDFLink_GetLinkAtPoint((FPDF_PAGE) pagePtr, px, py);
 }
 JNI_FUNC(jint, PdfiumCore, nativeGetCharIndexAtCoord)(JNI_ARGS, jlong pagePtr, jdouble width,
                                                       jdouble height, jlong textPtr, jdouble posX,
                                                       jdouble posY, jdouble tolX, jdouble tolY) {
     double px, py;
-    FPDF_DeviceToPage((FPDF_PAGE) pagePtr, 0, 0, width, height, 0, posX, posY, &px, &py);
+    FPDF_DeviceToPage((FPDF_PAGE) pagePtr, 0, 0, (int) width, (int) height, 0,
+                      (int) posX,
+                      (int) posY,
+                      &px,
+                      &py);
     return FPDFText_GetCharIndexAtPos((FPDF_TEXTPAGE) textPtr, px, py, tolX, tolY);
 }
 JNI_FUNC(jstring, PdfiumCore, nativeGetText)(JNI_ARGS, jlong textPtr) {
     int len = FPDFText_CountChars((FPDF_TEXTPAGE) textPtr);
     //unsigned short* buffer = malloc(len*sizeof(unsigned short));
-    unsigned short *buffer = new unsigned short[len + 1];
+    auto *buffer = new unsigned short[len + 1];
     FPDFText_GetText((FPDF_TEXTPAGE) textPtr, 0, len, buffer);
     jstring ret = env->NewString(buffer, len);
     delete[]buffer;
@@ -521,7 +604,7 @@ JNI_FUNC(jstring, PdfiumCore, nativeGetText)(JNI_ARGS, jlong textPtr) {
 }
 
 JNI_FUNC(jstring, PdfiumCore, nativeGetTextPart)(JNI_ARGS, jlong textPtr, int start, int len) {
-    unsigned short *buffer = new unsigned short[len + 1];
+    auto *buffer = new unsigned short[len + 1];
     FPDFText_GetText((FPDF_TEXTPAGE) textPtr, start, len, buffer);
     jstring ret = env->NewString(buffer, len);
     delete[]buffer;
@@ -532,10 +615,13 @@ JNI_FUNC(void, PdfiumCore, nativeRenderPageBitmap)(JNI_ARGS, jlong pagePtr, jobj
                                                    jint dpi, jint startX, jint startY,
                                                    jint drawSizeHor, jint drawSizeVer,
                                                    jboolean renderAnnot) {
+    if (!dpi) {
+        LOGD("NO DPI");
+    }
 
-    FPDF_PAGE page = reinterpret_cast<FPDF_PAGE>(pagePtr);
+    auto page = reinterpret_cast<FPDF_PAGE>(pagePtr);
 
-    if (page == NULL || bitmap == NULL) {
+    if (page == nullptr || bitmap == nullptr) {
         LOGE("Render page pointers invalid");
         return;
     }
@@ -547,8 +633,8 @@ JNI_FUNC(void, PdfiumCore, nativeRenderPageBitmap)(JNI_ARGS, jlong pagePtr, jobj
         return;
     }
 
-    int canvasHorSize = info.width;
-    int canvasVerSize = info.height;
+    int canvasHorSize = (int) info.width;
+    int canvasVerSize = (int) info.height;
 
     if (info.format != ANDROID_BITMAP_FORMAT_RGBA_8888 &&
         info.format != ANDROID_BITMAP_FORMAT_RGB_565) {
@@ -567,23 +653,17 @@ JNI_FUNC(void, PdfiumCore, nativeRenderPageBitmap)(JNI_ARGS, jlong pagePtr, jobj
     int sourceStride;
     if (info.format == ANDROID_BITMAP_FORMAT_RGB_565) {
         tmp = malloc(canvasVerSize * canvasHorSize * sizeof(rgb));
-        sourceStride = canvasHorSize * sizeof(rgb);
+        sourceStride = canvasHorSize * (int) sizeof(rgb);
         format = FPDFBitmap_BGR;
     } else {
         tmp = addr;
-        sourceStride = info.stride;
+        sourceStride = (int) info.stride;
         format = FPDFBitmap_BGRA;
     }
 
-    FPDF_BITMAP pdfBitmap = FPDFBitmap_CreateEx(canvasHorSize, canvasVerSize,
-                                                format, tmp, sourceStride);
+    FPDF_BITMAP pdfBitmap = FPDFBitmap_CreateEx((int) canvasHorSize, (int) canvasVerSize,
+                                                format, tmp, (int) sourceStride);
 
-    /*LOGD("Start X: %d", startX);
-    LOGD("Start Y: %d", startY);
-    LOGD("Canvas Hor: %d", canvasHorSize);
-    LOGD("Canvas Ver: %d", canvasVerSize);
-    LOGD("Draw Hor: %d", drawSizeHor);
-    LOGD("Draw Ver: %d", drawSizeVer);*/
 
     if (drawSizeHor < canvasHorSize || drawSizeVer < canvasVerSize) {
         FPDFBitmap_FillRect(pdfBitmap, 0, 0, canvasHorSize, canvasVerSize,
@@ -605,8 +685,10 @@ JNI_FUNC(void, PdfiumCore, nativeRenderPageBitmap)(JNI_ARGS, jlong pagePtr, jobj
 
     FPDF_RenderPageBitmap(pdfBitmap, page,
                           startX, startY,
-                          (int) drawSizeHor, (int) drawSizeVer,
-                          0, flags);
+                          (int) drawSizeHor,
+                          (int) drawSizeVer,
+                          0,
+                          flags);
 
     if (info.format == ANDROID_BITMAP_FORMAT_RGB_565) {
         rgbBitmapTo565(tmp, sourceStride, addr, &info);
@@ -617,28 +699,28 @@ JNI_FUNC(void, PdfiumCore, nativeRenderPageBitmap)(JNI_ARGS, jlong pagePtr, jobj
 }
 
 JNI_FUNC(jstring, PdfiumCore, nativeGetDocumentMetaText)(JNI_ARGS, jlong docPtr, jstring tag) {
-    const char *ctag = env->GetStringUTFChars(tag, NULL);
-    if (ctag == NULL) {
+    const char *ctag = env->GetStringUTFChars(tag, nullptr);
+    if (ctag == nullptr) {
         return env->NewStringUTF("");
     }
-    DocumentFile *doc = reinterpret_cast<DocumentFile *>(docPtr);
+    auto *doc = reinterpret_cast<DocumentFile *>(docPtr);
 
-    size_t bufferLen = FPDF_GetMetaText(doc->pdfDocument, ctag, NULL, 0);
+    size_t bufferLen = FPDF_GetMetaText(doc->pdfDocument, ctag, nullptr, 0);
     if (bufferLen <= 2) {
         return env->NewStringUTF("");
     }
     std::wstring text;
     FPDF_GetMetaText(doc->pdfDocument, ctag, WriteInto(&text, bufferLen + 1), bufferLen);
     env->ReleaseStringUTFChars(tag, ctag);
-    return env->NewString((jchar *) text.c_str(), bufferLen / 2 - 1);
+    return env->NewString((jchar *) text.c_str(), (int) bufferLen / 2 - 1);
 }
 
 JNI_FUNC(jobject, PdfiumCore, nativeGetFirstChildBookmark)(JNI_ARGS, jlong docPtr,
                                                            jobject bookmarkPtr) {
-    DocumentFile *doc = reinterpret_cast<DocumentFile *>(docPtr);
+    auto *doc = reinterpret_cast<DocumentFile *>(docPtr);
     FPDF_BOOKMARK parent;
-    if (bookmarkPtr == NULL) {
-        parent = NULL;
+    if (bookmarkPtr == nullptr) {
+        parent = nullptr;
     } else {
         jclass longClass = env->GetObjectClass(bookmarkPtr);
         jmethodID longValueMethod = env->GetMethodID(longClass, "longValue", "()J");
@@ -647,46 +729,46 @@ JNI_FUNC(jobject, PdfiumCore, nativeGetFirstChildBookmark)(JNI_ARGS, jlong docPt
         parent = reinterpret_cast<FPDF_BOOKMARK>(ptr);
     }
     FPDF_BOOKMARK bookmark = FPDFBookmark_GetFirstChild(doc->pdfDocument, parent);
-    if (bookmark == NULL) {
-        return NULL;
+    if (bookmark == nullptr) {
+        return nullptr;
     }
     return NewLong(env, reinterpret_cast<jlong>(bookmark));
 }
 
 JNI_FUNC(jobject, PdfiumCore, nativeGetSiblingBookmark)(JNI_ARGS, jlong docPtr, jlong bookmarkPtr) {
-    DocumentFile *doc = reinterpret_cast<DocumentFile *>(docPtr);
-    FPDF_BOOKMARK parent = reinterpret_cast<FPDF_BOOKMARK>(bookmarkPtr);
+    auto *doc = reinterpret_cast<DocumentFile *>(docPtr);
+    auto parent = reinterpret_cast<FPDF_BOOKMARK>(bookmarkPtr);
     FPDF_BOOKMARK bookmark = FPDFBookmark_GetNextSibling(doc->pdfDocument, parent);
-    if (bookmark == NULL) {
-        return NULL;
+    if (bookmark == nullptr) {
+        return nullptr;
     }
     return NewLong(env, reinterpret_cast<jlong>(bookmark));
 }
 
 JNI_FUNC(jstring, PdfiumCore, nativeGetBookmarkTitle)(JNI_ARGS, jlong bookmarkPtr) {
-    FPDF_BOOKMARK bookmark = reinterpret_cast<FPDF_BOOKMARK>(bookmarkPtr);
-    size_t bufferLen = FPDFBookmark_GetTitle(bookmark, NULL, 0);
+    auto bookmark = reinterpret_cast<FPDF_BOOKMARK>(bookmarkPtr);
+    size_t bufferLen = FPDFBookmark_GetTitle(bookmark, nullptr, 0);
     if (bufferLen <= 2) {
         return env->NewStringUTF("");
     }
     std::wstring title;
     FPDFBookmark_GetTitle(bookmark, WriteInto(&title, bufferLen + 1), bufferLen);
-    return env->NewString((jchar *) title.c_str(), bufferLen / 2 - 1);
+    return env->NewString((jchar *) title.c_str(), (jsize) bufferLen / 2 - 1);
 }
 
 JNI_FUNC(jlong, PdfiumCore, nativeGetBookmarkDestIndex)(JNI_ARGS, jlong docPtr, jlong bookmarkPtr) {
-    DocumentFile *doc = reinterpret_cast<DocumentFile *>(docPtr);
-    FPDF_BOOKMARK bookmark = reinterpret_cast<FPDF_BOOKMARK>(bookmarkPtr);
+    auto *doc = reinterpret_cast<DocumentFile *>(docPtr);
+    auto bookmark = reinterpret_cast<FPDF_BOOKMARK>(bookmarkPtr);
 
     FPDF_DEST dest = FPDFBookmark_GetDest(doc->pdfDocument, bookmark);
-    if (dest == NULL) {
+    if (dest == nullptr) {
         return -1;
     }
     return (jlong) FPDFDest_GetDestPageIndex(doc->pdfDocument, dest);
 }
 
 JNI_FUNC(jlongArray, PdfiumCore, nativeGetPageLinks)(JNI_ARGS, jlong pagePtr) {
-    FPDF_PAGE page = reinterpret_cast<FPDF_PAGE>(pagePtr);
+    auto page = reinterpret_cast<FPDF_PAGE>(pagePtr);
     int pos = 0;
     std::vector<jlong> links;
     FPDF_LINK link;
@@ -694,30 +776,30 @@ JNI_FUNC(jlongArray, PdfiumCore, nativeGetPageLinks)(JNI_ARGS, jlong pagePtr) {
         links.push_back(reinterpret_cast<jlong>(link));
     }
 
-    jlongArray result = env->NewLongArray(links.size());
-    env->SetLongArrayRegion(result, 0, links.size(), &links[0]);
+    jlongArray result = env->NewLongArray((jsize) links.size());
+    env->SetLongArrayRegion(result, 0, (jsize) links.size(), &links[0]);
     return result;
 }
 
 JNI_FUNC(jobject, PdfiumCore, nativeGetDestPageIndex)(JNI_ARGS, jlong docPtr, jlong linkPtr) {
-    DocumentFile *doc = reinterpret_cast<DocumentFile *>(docPtr);
-    FPDF_LINK link = reinterpret_cast<FPDF_LINK>(linkPtr);
+    auto *doc = reinterpret_cast<DocumentFile *>(docPtr);
+    auto link = reinterpret_cast<FPDF_LINK>(linkPtr);
     FPDF_DEST dest = FPDFLink_GetDest(doc->pdfDocument, link);
-    if (dest == NULL) {
-        return NULL;
+    if (dest == nullptr) {
+        return nullptr;
     }
     unsigned long index = FPDFDest_GetDestPageIndex(doc->pdfDocument, dest);
     return NewInteger(env, (jint) index);
 }
 
 JNI_FUNC(jstring, PdfiumCore, nativeGetLinkURI)(JNI_ARGS, jlong docPtr, jlong linkPtr) {
-    DocumentFile *doc = reinterpret_cast<DocumentFile *>(docPtr);
-    FPDF_LINK link = reinterpret_cast<FPDF_LINK>(linkPtr);
+    auto *doc = reinterpret_cast<DocumentFile *>(docPtr);
+    auto link = reinterpret_cast<FPDF_LINK>(linkPtr);
     FPDF_ACTION action = FPDFLink_GetAction(link);
-    if (action == NULL) {
-        return NULL;
+    if (action == nullptr) {
+        return nullptr;
     }
-    size_t bufferLen = FPDFAction_GetURIPath(doc->pdfDocument, action, NULL, 0);
+    size_t bufferLen = FPDFAction_GetURIPath(doc->pdfDocument, action, nullptr, 0);
     if (bufferLen <= 0) {
         return env->NewStringUTF("");
     }
@@ -728,11 +810,8 @@ JNI_FUNC(jstring, PdfiumCore, nativeGetLinkURI)(JNI_ARGS, jlong docPtr, jlong li
 JNI_FUNC(void, PdfiumCore, nativeGetCharPos)(JNI_ARGS, jlong pagePtr, jint offsetY, jint offsetX,
                                              jint width, jint height, jobject pt, jlong textPtr,
                                              jint idx, jboolean loose) {
-    //jclass point = env->FindClass("android/graphics/PointF");
-    //jmethodID point_set = env->GetMethodID(point,"set","(FF)V");
-    jclass rectF = env->FindClass("android/graphics/RectF");
-    jmethodID rectF_ = env->GetMethodID(rectF, "<init>", "(FFFF)V");
-    jmethodID rectF_set = env->GetMethodID(rectF, "set", "(FFFF)V");
+
+    if (init_classes)initClasses(env);
     double left, top, right, bottom;
     if (loose) {
         FS_RECTF res = {0};
@@ -750,8 +829,8 @@ JNI_FUNC(void, PdfiumCore, nativeGetCharPos)(JNI_ARGS, jlong pagePtr, jint offse
     }
     int deviceX, deviceY;
     FPDF_PageToDevice((FPDF_PAGE) pagePtr, 0, 0, width, height, 0, left, top, &deviceX, &deviceY);
-    width = right - left;
-    height = top - bottom;
+    width = (jint) (right - left);
+    height = (jint) (top - bottom);
     left = deviceX + offsetX;
     top = deviceY + offsetY;
     right = left + width;
@@ -761,58 +840,15 @@ JNI_FUNC(void, PdfiumCore, nativeGetCharPos)(JNI_ARGS, jlong pagePtr, jint offse
 }
 
 
-static bool init_classes = true;
-static jclass arrList;
-static jmethodID arrList_add;
-static jmethodID arrList_get;
-static jmethodID arrList_size;
-static jmethodID arrList_enssurecap;
-
-static jclass integer;
-static jmethodID integer_;
-
-static jclass rectF;
-static jmethodID rectF_;
-static jmethodID rectF_set;
-static jfieldID rectF_left;
-static jfieldID rectF_top;
-static jfieldID rectF_right;
-static jfieldID rectF_bottom;
-void initClasses(JNIEnv *env) {
-    LOGE("fatal initClasses");
-    jclass arrListTmp = env->FindClass("java/util/ArrayList");
-    arrList = (jclass) env->NewGlobalRef(arrListTmp);
-    env->DeleteLocalRef(arrListTmp);
-    arrList_add = env->GetMethodID(arrList, "add", "(Ljava/lang/Object;)Z");
-    arrList_get = env->GetMethodID(arrList, "get", "(I)Ljava/lang/Object;");
-    arrList_size = env->GetMethodID(arrList, "size", "()I");
-    arrList_enssurecap = env->GetMethodID(arrList, "ensureCapacity", "(I)V");
-
-    jclass integerTmp = env->FindClass("java/lang/Integer");
-    integer = (jclass) env->NewGlobalRef(integerTmp);
-    env->DeleteLocalRef(integerTmp);
-    integer_ = env->GetMethodID(integer, "<init>", "(I)V");
-
-    jclass rectFTmp = env->FindClass("android/graphics/RectF");
-    rectF = (jclass) env->NewGlobalRef(rectFTmp);
-    env->DeleteLocalRef(rectFTmp);
-    rectF_ = env->GetMethodID(rectF, "<init>", "(FFFF)V");
-    rectF_set = env->GetMethodID(rectF, "set", "(FFFF)V");
-    rectF_left = env->GetFieldID(rectF, "left", "F");
-    rectF_top = env->GetFieldID(rectF, "top", "F");
-    rectF_right = env->GetFieldID(rectF, "right", "F");
-    rectF_bottom = env->GetFieldID(rectF, "bottom", "F");
-
-
-    init_classes = false;
-}
 JNI_FUNC(jboolean, PdfiumCore, nativeGetMixedLooseCharPos)(JNI_ARGS, jlong pagePtr, jint offsetY,
                                                            jint offsetX, jint width, jint height,
                                                            jobject pt, jlong textPtr, jint idx,
                                                            jboolean loose) {
-    jclass rectF = env->FindClass("android/graphics/RectF");
-    jmethodID rectF_ = env->GetMethodID(rectF, "<init>", "(FFFF)V");
-    jmethodID rectF_set = env->GetMethodID(rectF, "set", "(FFFF)V");
+    if (!loose) {
+        LOGD("NO LOOSE");
+    }
+    if (init_classes)initClasses(env);
+
     double left, top, right, bottom;
     if (!FPDFText_GetCharBox((FPDF_TEXTPAGE) textPtr, idx, &left, &right, &bottom, &top)) {
         return false;
@@ -831,14 +867,14 @@ JNI_FUNC(jboolean, PdfiumCore, nativeGetMixedLooseCharPos)(JNI_ARGS, jlong pageP
 
     /* width = right - left;
      height = top - bottom;*/
-    height = top - bottom;
+    height = (jint) (top - bottom);
     top = deviceY + offsetY;
     left = deviceX + offsetX;
 
     FPDF_PageToDevice((FPDF_PAGE) pagePtr, 0, 0, width, height, 0, right, bottom, &deviceX,
                       &deviceY);
 
-    width = deviceX - left;
+    width = (jint) (deviceX - left);
 
 
     right = left + width;
@@ -851,15 +887,6 @@ JNI_FUNC(jint, PdfiumCore, nativeCountAndGetRects)(JNI_ARGS, jlong pagePtr, jint
                                                    jint offsetX, jint width, jint height,
                                                    jobject arr, jlong textPtr, jint st, jint ed) {
     if (init_classes) initClasses(env);
-    //jclass arrList = env->FindClass("java/util/ArrayList");
-    //jmethodID arrList_add = env->GetMethodID(arrList,"add","(Ljava/lang/Object;)Z");
-    //jmethodID arrList_get = env->GetMethodID(arrList,"get","(I)Ljava/lang/Object;");
-    //jmethodID arrList_size = env->GetMethodID(arrList,"size","()I");
-    //jmethodID arrList_enssurecap = env->GetMethodID(arrList,"ensureCapacity","(I)V");
-//
-    //jclass rectF = env->FindClass("android/graphics/RectF");
-    //jmethodID rectF_ = env->GetMethodID(rectF, "<init>", "(FFFF)V");
-    //jmethodID rectF_set = env->GetMethodID(rectF, "set", "(FFFF)V");
 
     int rectCount = FPDFText_CountRects((FPDF_TEXTPAGE) textPtr, (int) st, (int) ed);
     env->CallVoidMethod(arr, arrList_enssurecap, rectCount);
@@ -881,8 +908,8 @@ JNI_FUNC(jint, PdfiumCore, nativeCountAndGetRects)(JNI_ARGS, jlong pagePtr, jint
             left = deviceX + offsetX;
             top = deviceY + offsetY;
 
-            int new_width = deviceRight - left;
-            int new_height = deviceBottom - top;
+            jint new_width = (jint) (deviceRight - left);
+            jint new_height = (jint) (deviceBottom - top);
 
             right = left + new_width;
             bottom = top + new_height;
@@ -902,18 +929,19 @@ JNI_FUNC(jint, PdfiumCore, nativeCountAndGetRects)(JNI_ARGS, jlong pagePtr, jint
 
 
 JNI_FUNC(jobject, PdfiumCore, nativeGetLinkRect)(JNI_ARGS, jlong linkPtr) {
-    FPDF_LINK link = reinterpret_cast<FPDF_LINK>(linkPtr);
+    auto link = reinterpret_cast<FPDF_LINK>(linkPtr);
     FS_RECTF fsRectF;
     FPDF_BOOL result = FPDFLink_GetAnnotRect(link, &fsRectF);
 
     if (!result) {
-        return NULL;
+        return nullptr;
     }
 
     jclass clazz = env->FindClass("android/graphics/RectF");
     jmethodID constructorID = env->GetMethodID(clazz, "<init>", "(FFFF)V");
-    return env->NewObject(clazz, constructorID, fsRectF.left, fsRectF.top, fsRectF.right,
-                          fsRectF.bottom);
+    return env->NewObject(clazz, constructorID, (jfloat) fsRectF.left, (jfloat) fsRectF.top,
+                          (jfloat) fsRectF.right,
+                          (jfloat) fsRectF.bottom);
 }
 JNI_FUNC(jint, PdfiumCore, nativeGetFindIdx)(JNI_ARGS, jlong searchPtr) {
     return FPDFText_GetSchResultIndex((FPDF_SCHHANDLE) searchPtr);
@@ -969,8 +997,8 @@ JNI_FUNC(jlong, PdfiumCore, nativeGetStringChars)(JNI_ARGS, jstring key) {
     return (long) env->GetStringChars(key, nullptr);
 }
 JNI_FUNC(jint, PdfiumCore, nativeFindTextPage)(JNI_ARGS, jlong textPtr, jstring key, jint flag) {
-    const unsigned short *keyStr = env->GetStringChars(key, 0);
-    FPDF_TEXTPAGE text = (FPDF_TEXTPAGE) textPtr;
+    const unsigned short *keyStr = env->GetStringChars(key, nullptr);
+    auto text = (FPDF_TEXTPAGE) textPtr;
     int foundIdx = -1;
     if (text) {
         FPDF_SCHHANDLE findHandle = FPDFText_FindStart(text, keyStr, flag, 0);
@@ -997,7 +1025,7 @@ JNI_FUNC(jobject, PdfiumCore, nativePageCoordsToDevice)(JNI_ARGS, jlong pagePtr,
                                                         jint startY, jint sizeX,
                                                         jint sizeY, jint rotate, jdouble pageX,
                                                         jdouble pageY) {
-    FPDF_PAGE page = reinterpret_cast<FPDF_PAGE>(pagePtr);
+    auto page = reinterpret_cast<FPDF_PAGE>(pagePtr);
     int deviceX, deviceY;
 
     FPDF_PageToDevice(page, startX, startY, sizeX, sizeY, rotate, pageX, pageY, &deviceX, &deviceY);
@@ -1009,8 +1037,8 @@ JNI_FUNC(jobject, PdfiumCore, nativePageCoordsToDevice)(JNI_ARGS, jlong pagePtr,
 static jlong loadTextPageInternal(JNIEnv *env, FPDF_PAGE page) {
     try {
         FPDF_TEXTPAGE text = FPDFText_LoadPage(page);
-        if (page == NULL) {
-            throw "Loaded page is null";
+        if (page == nullptr) {
+            return -1;
         }
         return reinterpret_cast<jlong>(text);
     } catch (const char *msg) {
@@ -1024,6 +1052,268 @@ static jlong loadTextPageInternal(JNIEnv *env, FPDF_PAGE page) {
 }
 JNI_FUNC(jlong, PdfiumCore, nativeLoadTextPage)(JNI_ARGS, jlong pagePtr) {
     return loadTextPageInternal(env, (FPDF_PAGE) pagePtr);
+}
+JNI_FUNC(jboolean, PdfiumCore, closeTextPage)(JNI_ARGS, jlong pagePtr) {
+    FPDFText_ClosePage((FPDF_TEXTPAGE) pagePtr);
+    return JNI_TRUE;
+}
+
+
+jobject createBitmap(JNIEnv *env, int w, int h) {
+    // Get the Bitmap class and createBitmap method
+    jclass bitmapClass = env->FindClass("android/graphics/Bitmap");
+    jmethodID createBitmapMethod = env->GetStaticMethodID(
+            bitmapClass,
+            "createBitmap",
+            "(IILandroid/graphics/Bitmap$Config;)Landroid/graphics/Bitmap;"
+    );
+
+    // Get the Bitmap.Config class and ARGB_8888 field
+    jclass bitmapConfigClass = env->FindClass("android/graphics/Bitmap$Config");
+    jfieldID argb8888Field = env->GetStaticFieldID(bitmapConfigClass, "ARGB_8888",
+                                                   "Landroid/graphics/Bitmap$Config;");
+    jobject argb8888Config = env->GetStaticObjectField(bitmapConfigClass, argb8888Field);
+
+    // Create a Bitmap using Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+    jobject bitmap = env->CallStaticObjectMethod(bitmapClass, createBitmapMethod, w, h,
+                                                 argb8888Config);
+
+    if (!bitmap) {
+        // Throw an exception if bitmap creation fails
+        jclass runtimeExceptionClass = env->FindClass("java/lang/RuntimeException");
+        env->ThrowNew(runtimeExceptionClass, "Failed to create Bitmap");
+        return nullptr;
+    }
+
+    return bitmap;
+}
+
+
+static jobject NewTextImage(JNIEnv *env, jfloat left, jfloat top, jfloat right, jfloat bottom,
+                            jboolean isImage, jobject bitmap, jstring text) {
+    jclass textImageClass = env->FindClass("com/vivlio/android/pdfium/TextImage");
+    if (textImageClass == nullptr) {
+        LOGE("Failed to find TextImage class");
+        return nullptr; // Handle class not found error
+    }
+    jmethodID constructor = env->GetMethodID(textImageClass, "<init>",
+                                             "(FFFFZLjava/lang/String;Landroid/graphics/Bitmap;)V");
+    if (constructor == nullptr) {
+        LOGE("Failed to find TextImage constructor");
+        return nullptr;
+    }
+    jobject textImage = env->NewObject(textImageClass,
+                                       constructor,
+                                       left, top, right, bottom,
+                                       isImage,
+                                       text,
+                                       bitmap
+    );
+    return textImage;
+}
+
+JNI_FUNC(jobjectArray, PdfiumCore, nativeFindBitmaps)(JNI_ARGS, jlong pagePtr) {
+    auto page = (FPDF_PAGE) pagePtr;
+    if (!page) return nullptr;
+
+    // Get the JNIEnv and Bitmap class
+    jclass bitmapClass = env->FindClass("android/graphics/Bitmap");
+    if (!bitmapClass) {
+        LOGE("Failed to find android/graphics/Bitmap class");
+        return nullptr;
+    }
+
+    // Create an empty vector for textImages
+    std::vector<jobject> textImages;
+
+    // Iterate through page objects
+    for (int i = 0; i < FPDFPage_CountObjects(page); i++) {
+        FPDF_PAGEOBJECT obj = FPDFPage_GetObject(page, i);
+        int objType = FPDFPageObj_GetType(obj);
+        if (objType == FPDF_PAGEOBJ_IMAGE) {
+            FPDF_BITMAP pdfBitmap = FPDFImageObj_GetBitmap(obj);
+
+            if (!pdfBitmap) {
+                LOGE("Failed to get FPDF bitmap");
+                continue;
+            }
+            float left, top, right, bottom;
+            FPDFPageObj_GetBounds(obj, &left, &bottom, &right, &top);
+            // Get bitmap dimensions and buffer
+            int width = FPDFBitmap_GetWidth(pdfBitmap);
+            int height = FPDFBitmap_GetHeight(pdfBitmap);
+            int stride = FPDFBitmap_GetStride(pdfBitmap);
+            auto format = FPDFBitmap_GetFormat(pdfBitmap);
+            if (format == FPDFBitmap_Unknown) {
+                LOGE("Unsupported bitmap format");
+                FPDFBitmap_Destroy(pdfBitmap);
+                continue;
+            }
+
+            auto *srcBuffer = (unsigned char *) FPDFBitmap_GetBuffer(pdfBitmap);
+            if (!srcBuffer) {
+                LOGE("Failed to get buffer from FPDF bitmap");
+                FPDFBitmap_Destroy(pdfBitmap);
+                continue;
+            }
+
+            // Create a Java Bitmap object
+            jobject androidBitmap = createBitmap(env, width, height);
+            if (!androidBitmap) {
+                LOGE("Failed to create Android Bitmap");
+                FPDFBitmap_Destroy(pdfBitmap);
+                continue;
+            }
+
+            // Access and fill pixel data into the Java Bitmap
+            AndroidBitmapInfo info;
+            if (AndroidBitmap_getInfo(env, androidBitmap, &info) == ANDROID_BITMAP_RESULT_SUCCESS) {
+                void *dstPixels;
+                if (AndroidBitmap_lockPixels(env, androidBitmap, &dstPixels) ==
+                    ANDROID_BITMAP_RESULT_SUCCESS) {
+
+                    if (format == FPDFBitmap_Gray) {
+                        for (int y = 0; y < height; ++y) {
+                            unsigned char *srcRow = srcBuffer + y * stride;
+                            auto *dstRow = (uint32_t *) ((char *) dstPixels + y * info.stride);
+
+                            for (int x = 0; x < width; ++x) {
+                                unsigned char gray = srcRow[x];
+                                unsigned char a = 0xFF; // Full opacity
+                                dstRow[x] = (a << 24) | (gray << 16) | (gray << 8) | gray;
+                            }
+                        }
+                    }
+
+                    if (format == FPDFBitmap_BGR) {
+                        for (int y = 0; y < height; ++y) {
+                            unsigned char *srcRow = srcBuffer + y * stride;
+                            auto *dstRow = (uint32_t *) ((char *) dstPixels + y * info.stride);
+
+                            for (int x = 0; x < width; ++x) {
+                                unsigned char r = srcRow[x * 3 + 0];
+                                unsigned char g = srcRow[x * 3 + 1];
+                                unsigned char b = srcRow[x * 3 + 2];
+                                unsigned char a = 0xFF; // Full opacity
+                                dstRow[x] = (a << 24) | (r << 16) | (g << 8) | b;
+                            }
+                        }
+                    }
+
+                    if (format == FPDFBitmap_BGRA) {
+                        for (int y = 0; y < height; ++y) {
+                            unsigned char *srcRow = srcBuffer + y * stride;
+                            auto *dstRow = (uint32_t *) ((char *) dstPixels + y * info.stride);
+
+                            for (int x = 0; x < width; ++x) {
+                                unsigned char b = srcRow[x * 4 + 0];
+                                unsigned char g = srcRow[x * 4 + 1];
+                                unsigned char r = srcRow[x * 4 + 2];
+                                unsigned char a = srcRow[x * 4 + 3];
+                                dstRow[x] = (a << 24) | (r << 16) | (g << 8) | b;
+                            }
+                        }
+                    }
+
+                    if (format == FPDFBitmap_BGRx) {
+                        for (int y = 0; y < height; ++y) {
+                            unsigned char *srcRow = srcBuffer + y * stride;
+                            auto *dstRow = (uint32_t *) ((char *) dstPixels + y * info.stride);
+
+                            for (int x = 0; x < width; ++x) {
+                                unsigned char b = srcRow[x * 4 + 0];
+                                unsigned char g = srcRow[x * 4 + 1];
+                                unsigned char r = srcRow[x * 4 + 2];
+                                unsigned char a = 0xFF; // Full opacity
+                                dstRow[x] = (a << 24) | (r << 16) | (g << 8) | b;
+                            }
+                        }
+                    }
+
+
+                    AndroidBitmap_unlockPixels(env, androidBitmap);
+                } else {
+                    LOGE("Failed to lock pixels for Android Bitmap");
+                }
+            } else {
+                LOGE("Failed to get info for Android Bitmap");
+            }
+
+            // Add the Android Bitmap to the vector
+            textImages.push_back(NewTextImage(env, left, top, right, bottom,
+                                              JNI_TRUE,
+                                              androidBitmap,
+                                              nullptr));
+            env->DeleteLocalRef(androidBitmap);
+            FPDFBitmap_Destroy(pdfBitmap);
+        }
+    }
+
+    // Create a Java array of Bitmaps
+    jobjectArray textImageArray = env->NewObjectArray(
+            (jsize) textImages.size(),
+            env->FindClass("com/vivlio/android/pdfium/TextImage"), nullptr);
+    for (jsize i = 0; i < textImages.size(); i++) {
+        env->SetObjectArrayElement(textImageArray, (jsize) i, textImages[i]);
+        env->DeleteLocalRef(textImages[i]);
+    }
+
+    return textImageArray;
+}
+
+
+JNI_FUNC(jobjectArray, PdfiumCore, extractText)(JNI_ARGS, jlong textPtr) {
+    if (!textPtr) return nullptr;
+    auto textPage = (FPDF_TEXTPAGE) textPtr;
+    auto total = FPDFText_CountChars(textPage);
+    auto rectS = FPDFText_CountRects(textPage, 0, total);
+    double left, top, right, bottom;
+    std::vector<jobject> textImages(rectS);
+    for (int i = 0; i < rectS; ++i) {
+        FPDFText_GetRect(textPage, i, &left, &top, &right, &bottom);
+        auto len = FPDFText_GetBoundedText(textPage,
+                                           left,
+                                           top, right, bottom,
+                                           nullptr, 0) + 1;
+        std::vector<unsigned short> buffer(len);
+        FPDFText_GetBoundedText(textPage, left, top, right, bottom, buffer.data(), len);
+        std::u16string utf16Text(reinterpret_cast<char16_t *>(buffer.data()), len);
+        std::string utf8Text;
+        utf8Text.reserve(len);
+        for (char16_t c: utf16Text) {
+            if (c < 0x80) {
+                utf8Text += static_cast<char>(c);
+            } else if (c < 0x800) {
+                utf8Text += static_cast<char>(0xC0 | ((c >> 6) & 0x1F));
+                utf8Text += static_cast<char>(0x80 | (c & 0x3F));
+            } else {
+                utf8Text += static_cast<char>(0xE0 | ((c >> 12) & 0x0F));
+                utf8Text += static_cast<char>(0x80 | ((c >> 6) & 0x3F));
+                utf8Text += static_cast<char>(0x80 | (c & 0x3F));
+            }
+        }
+        textImages[i] = NewTextImage(
+                env,
+                (jfloat) left,
+                (jfloat) top,
+                (jfloat) right,
+                (jfloat) bottom,
+                JNI_FALSE,
+                nullptr,
+                env->NewStringUTF(utf8Text.c_str())
+        );
+    }
+
+    jobjectArray arr = env->NewObjectArray((jsize) textImages.size(),
+                                           env->FindClass("com/vivlio/android/pdfium/TextImage"),
+                                           nullptr);
+
+    for (int i = 0; i < textImages.size(); ++i) {
+        env->SetObjectArrayElement(arr, i, textImages[i]);
+        env->DeleteLocalRef(textImages[i]);
+    }
+
+    return arr;
 }
 
 }//extern C

@@ -24,6 +24,7 @@ import android.util.SparseBooleanArray;
 import com.github.barteksc.pdfviewer.exception.PageRenderingException;
 import com.github.barteksc.pdfviewer.util.ArrayUtils;
 import com.github.barteksc.pdfviewer.util.FitPolicy;
+import com.github.barteksc.pdfviewer.util.MapUtil;
 import com.github.barteksc.pdfviewer.util.PageSizeCalculator;
 import com.vivlio.android.pdfium.PdfDocument;
 import com.vivlio.android.pdfium.PdfiumCore;
@@ -320,26 +321,50 @@ class PdfFile {
         return pdfiumCore.nativeGetLinkTarget(pdfDocument.mNativeDocPtr, lnkPtr);
     }
 
-    public boolean openPage(int pageIndex) throws PageRenderingException {
+    public long openPage(int pageIndex) throws PageRenderingException {
         int docPage = documentPage(pageIndex);
         if (docPage < 0) {
-            return false;
+            return 0L;
         }
 
         synchronized (lock) {
             if (openedPages.indexOfKey(docPage) < 0) {
                 try {
-                    pdfiumCore.openPage(pdfDocument, docPage);
-
+                    long pagePtr = pdfiumCore.openPage(pdfDocument, docPage);
                     openedPages.put(docPage, true);
-                    return true;
+                    return pagePtr;
                 } catch (Exception e) {
                     openedPages.put(docPage, false);
                     throw new PageRenderingException(pageIndex, e);
                 }
+            } else {
+                return MapUtil.getOrDefault(pdfDocument.mNativePagesPtr, docPage, 0L);
             }
-            return false;
         }
+    }
+
+    public long getTextPage(int page) {
+        synchronized (lock) {
+            if (!pdfDocument.hasPage(page)) {
+                try {
+                    long pagePtr = openPage(page);
+                    if (pagePtr == 0L) return 0L;
+                } catch (PageRenderingException e) {
+                    Log.e(TAG, "loadText", e);
+                }
+            }
+            Long pagePtr = pdfDocument
+                    .mNativePagesPtr.get(page);
+
+            if (pagePtr == null) {
+                return 0L;
+            }
+            if (!pdfDocument.hasText(page)) {
+                long openTextPtr = pdfiumCore.openText(pagePtr);
+                pdfDocument.mNativeTextPtr.put(page, openTextPtr);
+            }
+        }
+        return MapUtil.getOrDefault(pdfDocument.mNativeTextPtr, page, 0L);
     }
 
     public boolean pageHasError(int pageIndex) {
