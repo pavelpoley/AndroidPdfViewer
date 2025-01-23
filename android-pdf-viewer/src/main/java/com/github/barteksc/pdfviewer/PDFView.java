@@ -1584,6 +1584,10 @@ public class PDFView extends RelativeLayout {
         return lockVerticalScroll;
     }
 
+    private boolean isScaling() {
+        return dragPinchManager.isScaling();
+    }
+
     void loadPageByOffset() {
         if (0 == pdfFile.getPagesCount()) {
             return;
@@ -1800,6 +1804,7 @@ public class PDFView extends RelativeLayout {
     public float getZoom() {
         return zoom;
     }
+
 
     public boolean isZooming() {
         return zoom != minZoom;
