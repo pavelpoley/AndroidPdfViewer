@@ -1475,10 +1475,10 @@ public class PDFView extends RelativeLayout {
      * @param moveHandle whether to move scroll handle or not
      */
     public void moveTo(float offsetX, float offsetY, boolean moveHandle) {
-        if (lockHorizontalScroll) {
+        if (lockHorizontalScroll && !dragPinchManager.isScaling()) {
             offsetX = currentXOffset;
         }
-        if (lockVerticalScroll) {
+        if (lockVerticalScroll && !dragPinchManager.isScaling()) {
             offsetY = currentYOffset;
         }
 
@@ -1548,11 +1548,11 @@ public class PDFView extends RelativeLayout {
             }
         }
 
-        if (!lockHorizontalScroll) {
+        if (!lockHorizontalScroll || dragPinchManager.isScaling()) {
             currentXOffset = offsetX;
         }
 
-        if (!lockVerticalScroll) {
+        if (!lockVerticalScroll || dragPinchManager.isScaling()) {
             currentYOffset = offsetY;
         }
 
