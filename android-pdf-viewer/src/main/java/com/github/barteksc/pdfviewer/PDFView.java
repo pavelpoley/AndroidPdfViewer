@@ -136,6 +136,9 @@ public class PDFView extends RelativeLayout {
     int selStart;
     int selEnd;
 
+    private boolean lockHorizontalScroll = false;
+    private boolean lockVerticalScroll = false;
+
 
     final Matrix matrix = new Matrix();
 
@@ -1472,6 +1475,13 @@ public class PDFView extends RelativeLayout {
      * @param moveHandle whether to move scroll handle or not
      */
     public void moveTo(float offsetX, float offsetY, boolean moveHandle) {
+        if (lockHorizontalScroll) {
+            offsetX = currentXOffset;
+        }
+        if (lockVerticalScroll) {
+            offsetY = currentYOffset;
+        }
+
         if (swipeVertical) {
             // Check X offset
             float scaledPageWidth = toCurrentScale(pdfFile.getMaxPageWidth());
@@ -1538,8 +1548,15 @@ public class PDFView extends RelativeLayout {
             }
         }
 
-        currentXOffset = offsetX;
-        currentYOffset = offsetY;
+        if (!lockHorizontalScroll) {
+            currentXOffset = offsetX;
+        }
+
+        if (!lockVerticalScroll) {
+            currentYOffset = offsetY;
+        }
+
+
         float positionOffset = getPositionOffset();
 
         if (moveHandle && scrollHandle != null && !documentFitsView()) {
@@ -1549,6 +1566,22 @@ public class PDFView extends RelativeLayout {
         callbacks.callOnPageScroll(getCurrentPage(), positionOffset);
 
         redraw();
+    }
+
+    public void lockHorizontalScroll(boolean lockHorizontalScroll) {
+        this.lockHorizontalScroll = lockHorizontalScroll;
+    }
+
+    public void lockVerticalScroll(boolean lockVerticalScroll) {
+        this.lockVerticalScroll = lockVerticalScroll;
+    }
+
+    public boolean isLockHorizontalScroll() {
+        return lockHorizontalScroll;
+    }
+
+    public boolean isLockVerticalScroll() {
+        return lockVerticalScroll;
     }
 
     void loadPageByOffset() {
