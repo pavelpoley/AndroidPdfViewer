@@ -16,6 +16,7 @@ import android.view.Gravity;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
+import android.view.WindowInsetsController;
 import android.view.WindowManager;
 import android.widget.PopupWindow;
 import android.widget.Toast;
@@ -27,7 +28,9 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.SearchView;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 
 import com.github.barteksc.pdfviewer.PDFView;
 import com.github.barteksc.pdfviewer.scroll.DefaultScrollHandle;
@@ -65,9 +68,10 @@ public class MainActivity extends AppCompatActivity {
         binding = ActivityMainBinding.inflate(getLayoutInflater(), null, false);
         setContentView(binding.getRoot());
         ViewCompat.setOnApplyWindowInsetsListener(binding.main, (v, insets) -> {
-            Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.ime());
+            Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars()
+                    | WindowInsetsCompat.Type.ime());
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
-            return insets;
+            return ViewCompat.onApplyWindowInsets(v, insets);
         });
 
         PDFView pdfView = binding.pdfView;
@@ -166,6 +170,8 @@ public class MainActivity extends AppCompatActivity {
         searchMenuItem.collapseActionView();
     }
 
+    private boolean mVisible = false;
+
     private void loadPdf(Uri uri) {
         resetAndCloseSearchView();
         PDFView.Configurator configurator = (uri == null ?
@@ -186,6 +192,16 @@ public class MainActivity extends AppCompatActivity {
                     updateSearchNavigation();
                 })
                 .onTap(e -> {
+                    WindowInsetsControllerCompat winInsets =
+                            WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+                    if (mVisible) {
+                        mVisible = false;
+                        winInsets.hide(WindowInsetsCompat.Type.systemBars());
+                    } else {
+                        winInsets.show(WindowInsetsCompat.Type.systemBars());
+                        mVisible = true;
+                    }
+
                     hidePopupMenu();
                     return true;
                 });

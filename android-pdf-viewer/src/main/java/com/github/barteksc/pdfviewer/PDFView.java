@@ -1111,7 +1111,7 @@ public class PDFView extends RelativeLayout {
     }
 
     @Override
-    protected void onSizeChanged(int w, int h, int oldW, int oldH) {
+    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         hasSize = true;
         if (waitingDocumentConfigurator != null) {
             waitingDocumentConfigurator.load();
@@ -1121,11 +1121,32 @@ public class PDFView extends RelativeLayout {
         }
 
         // calculates the position of the point which in the center of view relative to big strip
-        float centerPointInStripXOffset = -currentXOffset + oldW * 0.5f;
-        float centerPointInStripYOffset = -currentYOffset + oldH * 0.5f;
+        float centerPointInStripXOffset = -currentXOffset + oldw * 0.5f;
+        float centerPointInStripYOffset = -currentYOffset + oldh * 0.5f;
+
+        float relativeCenterPointInStripXOffset;
+        float relativeCenterPointInStripYOffset;
+
+        if (swipeVertical) {
+            relativeCenterPointInStripXOffset = centerPointInStripXOffset / pdfFile.getMaxPageWidth();
+            relativeCenterPointInStripYOffset = centerPointInStripYOffset / pdfFile.getDocLen(zoom);
+        } else {
+            relativeCenterPointInStripXOffset = centerPointInStripXOffset / pdfFile.getDocLen(zoom);
+            relativeCenterPointInStripYOffset = centerPointInStripYOffset / pdfFile.getMaxPageHeight();
+        }
+
         animationManager.stopAll();
         pdfFile.recalculatePageSizes(new Size(w, h));
-        jumpTo(currentPage);
+
+        if (swipeVertical) {
+            currentXOffset = -relativeCenterPointInStripXOffset * pdfFile.getMaxPageWidth() + w * 0.5f;
+            currentYOffset = -relativeCenterPointInStripYOffset * pdfFile.getDocLen(zoom) + h * 0.5f;
+        } else {
+            currentXOffset = -relativeCenterPointInStripXOffset * pdfFile.getDocLen(zoom) + w * 0.5f;
+            currentYOffset = -relativeCenterPointInStripYOffset * pdfFile.getMaxPageHeight() + h * 0.5f;
+        }
+        moveTo(currentXOffset, currentYOffset);
+        loadPageByOffset();
     }
 
 
@@ -1584,6 +1605,10 @@ public class PDFView extends RelativeLayout {
         return lockVerticalScroll;
     }
 
+    private boolean isScaling() {
+        return dragPinchManager.isScaling();
+    }
+
     void loadPageByOffset() {
         if (0 == pdfFile.getPagesCount()) {
             return;
@@ -1800,6 +1825,7 @@ public class PDFView extends RelativeLayout {
     public float getZoom() {
         return zoom;
     }
+
 
     public boolean isZooming() {
         return zoom != minZoom;

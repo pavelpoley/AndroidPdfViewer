@@ -77,10 +77,16 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
     private boolean scrolling = false;
     private boolean scaling = false;
     private boolean enabled = false;
+    private boolean isScaleAnimationInProgress = false;
 
     boolean isScaling() {
-        return scaling;
+        return scaling || isScaleAnimationInProgress;
     }
+
+    void setIsScaleAnimationInProgress(boolean isScaleAnimationInProgress) {
+        this.isScaleAnimationInProgress = isScaleAnimationInProgress;
+    }
+
 
     @SuppressLint("ClickableViewAccessibility")
     DragPinchManager(PDFView pdfView, AnimationManager animationManager) {

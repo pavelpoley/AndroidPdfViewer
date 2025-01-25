@@ -187,12 +187,14 @@ class AnimationManager {
 
         @Override
         public void onAnimationUpdate(ValueAnimator animation) {
+            pdfView.dragPinchManager.setIsScaleAnimationInProgress(true);
             float zoom = (Float) animation.getAnimatedValue();
             pdfView.zoomCenteredTo(zoom, new PointF(centerX, centerY));
         }
 
         @Override
         public void onAnimationCancel(@NonNull Animator animation) {
+            pdfView.dragPinchManager.setIsScaleAnimationInProgress(false);
             pdfView.loadPages();
             hideHandle();
             pdfView.callbacks.callOnScale(pdfView.getZoom());
@@ -200,6 +202,7 @@ class AnimationManager {
 
         @Override
         public void onAnimationEnd(@NonNull Animator animation) {
+            pdfView.dragPinchManager.setIsScaleAnimationInProgress(false);
             pdfView.loadPages();
             pdfView.performPageSnap();
             hideHandle();
