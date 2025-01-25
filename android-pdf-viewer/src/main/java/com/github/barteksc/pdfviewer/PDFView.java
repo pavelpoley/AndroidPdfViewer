@@ -97,6 +97,7 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -1125,7 +1126,9 @@ public class PDFView extends RelativeLayout {
         float centerPointInStripYOffset = -currentYOffset + oldH * 0.5f;
         animationManager.stopAll();
         pdfFile.recalculatePageSizes(new Size(w, h));
-        jumpTo(currentPage);
+
+        moveTo(currentXOffset,currentYOffset);
+        loadPageByOffset();
     }
 
 
