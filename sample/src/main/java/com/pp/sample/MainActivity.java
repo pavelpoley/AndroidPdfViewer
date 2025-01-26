@@ -12,11 +12,11 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.TextUtils;
+import android.util.Log;
 import android.view.Gravity;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
-import android.view.WindowInsetsController;
 import android.view.WindowManager;
 import android.widget.PopupWindow;
 import android.widget.Toast;
@@ -24,6 +24,7 @@ import android.widget.Toast;
 import androidx.activity.EdgeToEdge;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.SearchView;
 import androidx.core.graphics.Insets;
@@ -31,9 +32,12 @@ import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
+import androidx.recyclerview.widget.DividerItemDecoration;
+import androidx.recyclerview.widget.LinearLayoutManager;
 
 import com.github.barteksc.pdfviewer.PDFView;
 import com.github.barteksc.pdfviewer.scroll.DefaultScrollHandle;
+import com.google.android.material.bottomsheet.BottomSheetBehavior;
 import com.pp.sample.databinding.ActivityMainBinding;
 import com.pp.sample.databinding.LayoutMenuPopupTextSelectionBinding;
 
@@ -59,6 +63,8 @@ public class MainActivity extends AppCompatActivity {
     private SearchView searchView;
     private MenuItem searchMenuItem;
 
+    private BottomSheetBehavior<View> bottomSheetBehavior;
+
 
     @SuppressLint("NewApi")
     @Override
@@ -76,6 +82,15 @@ public class MainActivity extends AppCompatActivity {
 
         PDFView pdfView = binding.pdfView;
         loadPdf(null);
+        bottomSheetBehavior = BottomSheetBehavior.from(binding.persistentBottomSheet);
+        bottomSheetBehavior.setMaxHeight((int) (getResources().getDisplayMetrics().heightPixels * .5f));
+        bottomSheetBehavior.setHideable(true);
+        bottomSheetBehavior.setDraggable(true);
+        bottomSheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
+
+        LinearLayoutManager layoutManager = new LinearLayoutManager(this);
+        binding.tableOfContentRv.setLayoutManager(layoutManager);
+        binding.tableOfContentRv.addItemDecoration(new DividerItemDecoration(this, DividerItemDecoration.VERTICAL));
 
 
         setSupportActionBar(binding.mainToolbar);
@@ -104,7 +119,8 @@ public class MainActivity extends AppCompatActivity {
 
         binding.closeSearchBtn.setOnClickListener(v -> resetAndCloseSearchView());
         binding.openFile.setOnClickListener(v -> launcher.launch("application/pdf"));
-
+        binding.closeTableOfContent.setOnClickListener(v ->
+                bottomSheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN));
     }
 
     private void updateSearchNavigation() {
@@ -124,6 +140,29 @@ public class MainActivity extends AppCompatActivity {
             setupSearchView((SearchView) actionView, item);
         }
         return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
+        if (item.getItemId() == R.id.menu_table_of_content) {
+            bottomSheetBehavior.setState(BottomSheetBehavior.STATE_EXPANDED);
+            if (binding.tableOfContentRv.getAdapter() == null) {
+                var toc = binding.pdfView.getTableOfContents();
+                BookmarkAdapter adapter = new BookmarkAdapter(toc);
+                adapter.setOnTocClicked(tocItem -> {
+                    binding.pdfView.jumpToWithOffset(tocItem.getPageIndex(),
+                            tocItem.getRawX(),
+                            tocItem.getRawY());
+                    Log.d(TAG, "onOptionsItemSelected: " + tocItem);
+                });
+                binding.tableOfContentRv.setAdapter(adapter);
+                bottomSheetBehavior.setState(BottomSheetBehavior.STATE_EXPANDED);
+            }
+
+            return true;
+        }
+
+        return super.onOptionsItemSelected(item);
     }
 
     private void setupSearchView(SearchView searchView, MenuItem menuItem) {
@@ -170,7 +209,7 @@ public class MainActivity extends AppCompatActivity {
         searchMenuItem.collapseActionView();
     }
 
-    private boolean mVisible = false;
+    private boolean mVisible = true;
 
     private void loadPdf(Uri uri) {
         resetAndCloseSearchView();
@@ -179,10 +218,9 @@ public class MainActivity extends AppCompatActivity {
                 : binding.pdfView.fromUri(uri)
         ).scrollHandle(new DefaultScrollHandle(this))
                 .enableSwipe(true)
-                .swipeHorizontal(false)
+                .swipeHorizontal(true)
                 .enableDoubleTap(true)
                 .defaultPage(0)
-                .swipeHorizontal(false)
                 .onPageScroll((page, positionOffset) -> hidePopupMenu())
                 .spacing(10)
                 .onSelection(this::onTextSelected)

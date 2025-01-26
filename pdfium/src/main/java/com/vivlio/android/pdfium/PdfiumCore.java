@@ -29,6 +29,9 @@ public class PdfiumCore {
     private static final String TAG = PdfiumCore.class.getName();
     private static final Class<FileDescriptor> FD_CLASS = FileDescriptor.class;
     private static final String FD_FIELD_NAME = "descriptor";
+    /* synchronize native methods */
+    private static final Object lock = new Object();
+    private final int mCurrentDpi;
 
     static {
         try {
@@ -37,6 +40,14 @@ public class PdfiumCore {
         } catch (UnsatisfiedLinkError e) {
             Log.e(TAG, "Native libraries failed to load - " + e);
         }
+    }
+
+    /**
+     * Context needed to get screen density
+     */
+    public PdfiumCore(Context ctx) {
+        mCurrentDpi = ctx.getResources().getDisplayMetrics().densityDpi;
+        Log.d(TAG, "Starting PdfiumAndroid ");
     }
 
     @Nullable
@@ -103,6 +114,15 @@ public class PdfiumCore {
                                                int drawSizeHor, int drawSizeVer,
                                                boolean renderAnnot);
 
+
+    private native void nativeGetBookmarksArrayList(long docPtr, ArrayList<TOCEntry> out);
+
+    public ArrayList<TOCEntry> getTableOfContentsNew(PdfDocument document) {
+        var list = new ArrayList<TOCEntry>();
+        nativeGetBookmarksArrayList(document.mNativeDocPtr, list);
+        return list;
+    }
+
     private native String nativeGetDocumentMetaText(long docPtr, String tag);
 
     private native Long nativeGetFirstChildBookmark(long docPtr, Long bookmarkPtr);
@@ -112,6 +132,9 @@ public class PdfiumCore {
     private native String nativeGetBookmarkTitle(long bookmarkPtr);
 
     private native long nativeGetBookmarkDestIndex(long docPtr, long bookmarkPtr);
+
+    private native void nativeSetBookmarkCoordinates(long docPtr, long bookmarkPtr,
+                                                     PdfDocument.Bookmark bookmark);
 
     public native String nativeGetText(long textPtr);
 
@@ -169,11 +192,7 @@ public class PdfiumCore {
     private native Point nativePageCoordsToDevice(long pagePtr, int startX, int startY, int sizeX,
                                                   int sizeY, int rotate, double pageX, double pageY);
 
-
-    /* synchronize native methods */
-    private static final Object lock = new Object();
     private static Field mFdField = null;
-    private final int mCurrentDpi;
 
     /**
      * @noinspection JavaReflectionMemberAccess
@@ -205,13 +224,6 @@ public class PdfiumCore {
         }
     }
 
-    /**
-     * Context needed to get screen density
-     */
-    public PdfiumCore(Context ctx) {
-        mCurrentDpi = ctx.getResources().getDisplayMetrics().densityDpi;
-        Log.d(TAG, "Starting PdfiumAndroid ");
-    }
 
     /**
      * Create new document from file
@@ -506,7 +518,7 @@ public class PdfiumCore {
         PdfDocument.Bookmark bookmark = new PdfDocument.Bookmark();
         bookmark.mNativePtr = bookmarkPtr;
         bookmark.title = nativeGetBookmarkTitle(bookmarkPtr);
-        bookmark.pageIdx = nativeGetBookmarkDestIndex(doc.mNativeDocPtr, bookmarkPtr);
+        nativeSetBookmarkCoordinates(doc.mNativeDocPtr, bookmarkPtr, bookmark);
         tree.add(bookmark);
 
         Long child = nativeGetFirstChildBookmark(doc.mNativeDocPtr, bookmarkPtr);
