@@ -823,6 +823,22 @@ public class PDFView extends RelativeLayout {
         jumpTo(page, false);
     }
 
+    public void jumpToWithOffset(int page, float rawX, float rawY) {
+        var pageIndex = pdfFile.determineValidPageNumberFrom(page);
+        var originalPageSize = pdfFile.getOriginalPageSize(pageIndex);
+        var pageSize = pdfFile.getPageSize(pageIndex);
+        var pageY = -getPageY(pageIndex);
+        var pageX = -getPageX(pageIndex);
+        var dpi = getResources().getDisplayMetrics().densityDpi;
+        var px = (rawX * dpi) / 72;
+        var py = (rawY * dpi / 72);
+
+        float dy = pageSize.getHeight() - (pageSize.getHeight() * py / (float) originalPageSize.getHeight());
+        float dx = (pageSize.getWidth() * px / (float) originalPageSize.getWidth());
+        moveTo(pageX - dx, pageY - zoom * dy);
+        loadPageByOffset();
+    }
+
     void showPage(int pageNb) {
         if (recycled) {
             return;

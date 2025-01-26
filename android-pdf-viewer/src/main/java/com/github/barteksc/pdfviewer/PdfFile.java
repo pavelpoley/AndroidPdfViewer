@@ -152,15 +152,19 @@ class PdfFile {
         recalculatePageSizes(viewSize);
     }
 
+    PageSizeCalculator calculator;
+
     /**
      * Call after view size change to recalculate page sizes, offsets and document length
      *
      * @param viewSize new size of changed view
      */
+
     public void recalculatePageSizes(Size viewSize) {
         pageSizes.clear();
-        PageSizeCalculator calculator = new PageSizeCalculator(pageFitPolicy, originalMaxWidthPageSize,
-                originalMaxHeightPageSize, viewSize, fitEachPage);
+        calculator =
+                new PageSizeCalculator(pageFitPolicy, originalMaxWidthPageSize,
+                        originalMaxHeightPageSize, viewSize, fitEachPage);
         maxWidthPageSize = calculator.getOptimalMaxWidthPageSize();
         maxHeightPageSize = calculator.getOptimalMaxHeightPageSize();
 
@@ -189,6 +193,19 @@ class PdfFile {
         }
         return pageSizes.get(pageIndex);
     }
+
+    Size getOriginalPageSize(int pageIndex) {
+        int docPage = documentPage(pageIndex);
+        if (docPage < 0) {
+            return new Size(0, 0);
+        }
+        if (!ArrayUtils.isValidIndex(pageSizes, pageIndex)) {
+            Log.d(TAG, "getOriginalPageSize: " + pageIndex);
+            return new Size(0, 0);
+        }
+        return originalPageSizes.get(pageIndex);
+    }
+
 
     public SizeF getScaledPageSize(int pageIndex, float zoom) {
         SizeF size = getPageSize(pageIndex);

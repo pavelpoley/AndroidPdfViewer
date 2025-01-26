@@ -5,5 +5,10 @@
         android:icon="@drawable/baseline_search_24"
         android:title="@string/search_in_pdf"
         app:actionViewClass="androidx.appcompat.widget.SearchView"
-        app:showAsAction="always" />
+        app:showAsAction="ifRoom" />
+    <item
+        android:id="@+id/menu_table_of_content"
+        android:icon="@drawable/baseline_menu_book_24"
+        android:title="@string/table_of_contents"
+        app:showAsAction="never" />
 </menu>

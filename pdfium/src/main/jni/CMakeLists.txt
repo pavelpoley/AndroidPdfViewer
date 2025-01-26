@@ -17,7 +17,10 @@ include_directories(${CMAKE_SOURCE_DIR}/include/)
 # You can define multiple libraries, and CMake builds them for you.
 # Gradle automatically packages shared libraries with your APK.
 
-add_library(pdfium SHARED pdfium.cpp)
+add_library(pdfium SHARED
+        toc-helper.cpp
+        pdfium.cpp
+)
 
 # Searches for a specified prebuilt library and stores the path as a
 # variable. Because CMake includes system libraries in the search path by
@@ -34,7 +37,9 @@ add_library(pdfium SHARED pdfium.cpp)
 #set_target_properties(modpng PROPERTIES IMPORTED_LOCATION ${CMAKE_SOURCE_DIR}/lib/${ANDROID_ABI}/libmodpng.so)
 
 add_library(pdfsdk SHARED IMPORTED)
-set_target_properties(pdfsdk PROPERTIES IMPORTED_LOCATION ${CMAKE_SOURCE_DIR}/lib/${ANDROID_ABI}/libpdfsdk.so)
+set_target_properties(pdfsdk PROPERTIES
+        IMPORTED_LOCATION
+        ${CMAKE_SOURCE_DIR}/lib/${ANDROID_ABI}/libpdfsdk.so)
 
 find_library(log-lib log)
 find_library(jnigraphics-lib jnigraphics)

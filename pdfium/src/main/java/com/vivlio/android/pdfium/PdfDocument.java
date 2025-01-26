@@ -3,6 +3,8 @@ package com.vivlio.android.pdfium;
 import android.graphics.RectF;
 import android.os.ParcelFileDescriptor;
 
+import androidx.annotation.Keep;
+import androidx.annotation.NonNull;
 import androidx.collection.ArrayMap;
 
 import java.util.ArrayList;
@@ -59,6 +61,9 @@ public class PdfDocument {
         private final List<Bookmark> children = new ArrayList<>();
         String title;
         long pageIdx;
+        float rawXOffset;
+        float rawYOffset;
+        float rawZoom;
         long mNativePtr;
 
         public List<Bookmark> getChildren() {
@@ -76,7 +81,42 @@ public class PdfDocument {
         public long getPageIdx() {
             return pageIdx;
         }
+
+        public float getRawXOffset() {
+            return rawXOffset;
+        }
+
+        public float getRawYOffset() {
+            return rawYOffset;
+        }
+
+        public float getRawZoom() {
+            return rawZoom;
+        }
+
+
+        @Keep
+        void setValue(int pageIdx, float rawXOffset, float rawYOffset, float rawZoom) {
+            this.pageIdx = pageIdx;
+            this.rawXOffset = rawXOffset;
+            this.rawYOffset = rawYOffset;
+            this.rawZoom = rawZoom;
+        }
+
+        @NonNull
+        @Override
+        public String toString() {
+            return "Bookmark{" +
+                    "title='" + title + '\'' +
+                    ", pageIdx=" + pageIdx +
+                    ", rawXOffset=" + rawXOffset +
+                    ", rawYOffset=" + rawYOffset +
+                    ", rawZoom=" + rawZoom +
+                    ", childrenCount=" + children.size() +
+                    '}';
+        }
     }
+
 
     public static class Link {
         private final RectF bounds;
@@ -103,6 +143,7 @@ public class PdfDocument {
     }
 
     PdfDocument() {
+        var a = new ArrayList<>();
     }
 
     public long mNativeDocPtr;

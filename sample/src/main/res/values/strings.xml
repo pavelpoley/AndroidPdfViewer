@@ -10,4 +10,6 @@
     <string name="close_search">close</string>
 
     <string name="search_navigation_placeholder">%d of %d</string>
+    <string name="table_of_contents">Table of Contents</string>
+    <string name="expand">expand</string>
 </resources>

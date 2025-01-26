@@ -1,5 +1,6 @@
 #include "util.hpp"
 
+
 #define HAVE_PTHREADS true;
 extern "C" {
 #include <unistd.h>
@@ -22,6 +23,8 @@ extern "C" {
 #include <string>
 #include <vector>
 #include <fpdf_text.h>
+
+#include "toc-helper.h"
 
 using namespace android;
 
@@ -211,6 +214,31 @@ jobject NewInteger(JNIEnv *env, jint value) {
     jclass cls = env->FindClass("java/lang/Integer");
     jmethodID methodID = env->GetMethodID(cls, "<init>", "(I)V");
     return env->NewObject(cls, methodID, value);
+}
+
+
+jobject NewTocEntry(JNIEnv *env, const PdfDoc::TOCEntry &entry) {
+    jclass tocEntryClass = env->FindClass("com/vivlio/android/pdfium/TOCEntry");
+    if (!tocEntryClass) return nullptr;
+
+    jmethodID constructor = env->GetMethodID(
+            tocEntryClass, "<init>",
+            "(Ljava/lang/String;IIIFFF)V"
+    );
+    jstring javaTitle = env->NewString((jchar *) entry.title.c_str(),
+                                       (jsize) entry.bufferLen / 2 - 1);
+    if (javaTitle == nullptr) {
+        return nullptr;
+    }
+
+    if (!constructor) return nullptr;
+    jobject javaTOCEntry = env->NewObject(
+            tocEntryClass, constructor, javaTitle,
+            entry.pageIndex, entry.level,
+            entry.parentIndex, entry.x, entry.y, entry.zoom
+    );
+    env->DeleteLocalRef(javaTitle);
+    return javaTOCEntry;
 }
 
 uint16_t rgbTo565(rgb *color) {
@@ -698,6 +726,7 @@ JNI_FUNC(void, PdfiumCore, nativeRenderPageBitmap)(JNI_ARGS, jlong pagePtr, jobj
     AndroidBitmap_unlockPixels(env, bitmap);
 }
 
+//Start Bookmarks
 JNI_FUNC(jstring, PdfiumCore, nativeGetDocumentMetaText)(JNI_ARGS, jlong docPtr, jstring tag) {
     const char *ctag = env->GetStringUTFChars(tag, nullptr);
     if (ctag == nullptr) {
@@ -767,6 +796,27 @@ JNI_FUNC(jlong, PdfiumCore, nativeGetBookmarkDestIndex)(JNI_ARGS, jlong docPtr, 
     return (jlong) FPDFDest_GetDestPageIndex(doc->pdfDocument, dest);
 }
 
+JNI_FUNC(void, PdfiumCore, nativeSetBookmarkCoordinates)(JNI_ARGS, jlong docPtr, jlong bookmarkPtr,
+                                                         jobject bookmarkObj) {
+    auto *doc = reinterpret_cast<DocumentFile *>(docPtr);
+    auto bookmark = reinterpret_cast<FPDF_BOOKMARK>(bookmarkPtr);
+
+    FPDF_DEST dest = FPDFBookmark_GetDest(doc->pdfDocument, bookmark);
+    if (dest == nullptr) {
+        return;
+    }
+    auto pageIndex = FPDFDest_GetDestPageIndex(doc->pdfDocument, dest);
+    int hasX = 0, hasY = 0, hasZoom = 0;
+    float x = -1, y = -1, zoom = -1;
+
+    FPDFDest_GetLocationInPage(dest, &hasX, &hasY, &hasZoom, &x, &y, &zoom);
+
+    jclass bookmarkClass = env->GetObjectClass(bookmarkObj);
+    jmethodID bookmark_set = env->GetMethodID(bookmarkClass, "setValue", "(IFFF)V");
+    env->CallVoidMethod(bookmarkObj, bookmark_set, pageIndex, x, y, zoom);
+}
+
+
 JNI_FUNC(jlongArray, PdfiumCore, nativeGetPageLinks)(JNI_ARGS, jlong pagePtr) {
     auto page = reinterpret_cast<FPDF_PAGE>(pagePtr);
     int pos = 0;
@@ -791,6 +841,34 @@ JNI_FUNC(jobject, PdfiumCore, nativeGetDestPageIndex)(JNI_ARGS, jlong docPtr, jl
     unsigned long index = FPDFDest_GetDestPageIndex(doc->pdfDocument, dest);
     return NewInteger(env, (jint) index);
 }
+
+
+JNI_FUNC(void, PdfiumCore, nativeGetBookmarksArrayList)(JNI_ARGS,
+                                                        jlong docPtr,
+                                                        jobject arrayList) {
+    try {
+        if (init_classes) {
+            initClasses(env);
+        }
+        auto document = reinterpret_cast<DocumentFile *>(docPtr);
+        auto toc = PdfDoc::ExtractTOC(document->pdfDocument);
+        for (const auto &item: toc) {
+
+            jobject arr = NewTocEntry(env, item);
+            jboolean result = env->CallBooleanMethod(arrayList, arrList_add, arr);
+            env->DeleteLocalRef(arr);
+            if (result == JNI_FALSE) {
+                LOGE("Failed to add title to ArrayList");
+            }
+        }
+    } catch (...) {
+        LOGE("Exception in nativeGetBookmarksArrayList");
+    }
+
+}
+
+//END bookmark
+
 
 JNI_FUNC(jstring, PdfiumCore, nativeGetLinkURI)(JNI_ARGS, jlong docPtr, jlong linkPtr) {
     auto *doc = reinterpret_cast<DocumentFile *>(docPtr);
@@ -998,14 +1076,14 @@ JNI_FUNC(jlong, PdfiumCore, nativeGetStringChars)(JNI_ARGS, jstring key) {
     if (key == nullptr) {
         return 0;
     }
-    const jchar* chars = env->GetStringChars(key, nullptr);
+    const jchar *chars = env->GetStringChars(key, nullptr);
     if (chars == nullptr) {
         return 0;
     }
     jsize length = env->GetStringLength(key);
 #pragma clang diagnostic push
 #pragma ide diagnostic ignored "MemoryLeak"
-    auto* nativeChars = new jchar[length];
+    auto *nativeChars = new jchar[length];
 #pragma clang diagnostic pop
     std::memcpy(nativeChars, chars, length * sizeof(jchar));
     env->ReleaseStringChars(key, chars);
@@ -1016,10 +1094,9 @@ JNI_FUNC(void, PdfiumCore, nativeReleaseStringChars)(JNI_ARGS, jlong keyPtr) {
     if (keyPtr == 0) {
         return;
     }
-    auto* nativeChars = reinterpret_cast<jchar*>(keyPtr);
+    auto *nativeChars = reinterpret_cast<jchar *>(keyPtr);
     delete[] nativeChars;
 }
-
 
 
 JNI_FUNC(jint, PdfiumCore, nativeFindTextPage)(JNI_ARGS, jlong textPtr, jstring key, jint flag) {
