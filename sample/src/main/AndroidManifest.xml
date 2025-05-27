@@ -9,6 +9,9 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.AndroidPdfViewerFork">
         <activity
+            android:name=".PdfSearchResultActivity"
+            android:exported="false" />
+        <activity
             android:name=".MainActivity"
             android:configChanges="orientation|uiMode"
             android:exported="true"

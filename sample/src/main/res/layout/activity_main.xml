@@ -81,6 +81,14 @@
                 android:background="@null"
                 android:contentDescription="@string/close_search"
                 android:src="@drawable/navigate_next" />
+
+            <ImageButton
+                android:id="@+id/show_all_search_result"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:background="@null"
+                android:contentDescription="@string/show_search_result"
+                android:src="@drawable/baseline_menu_24" />
         </LinearLayout>
 
         <com.google.android.material.floatingactionbutton.FloatingActionButton

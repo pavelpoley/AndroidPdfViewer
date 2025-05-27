@@ -74,6 +74,7 @@ import com.github.barteksc.pdfviewer.model.Decoration;
 import com.github.barteksc.pdfviewer.model.PagePart;
 import com.github.barteksc.pdfviewer.model.SearchRecord;
 import com.github.barteksc.pdfviewer.model.SearchRecordItem;
+import com.github.barteksc.pdfviewer.model.SentencedSearchResult;
 import com.github.barteksc.pdfviewer.scroll.ScrollHandle;
 import com.github.barteksc.pdfviewer.source.AssetSource;
 import com.github.barteksc.pdfviewer.source.ByteArraySource;
@@ -85,6 +86,8 @@ import com.github.barteksc.pdfviewer.util.ArrayUtils;
 import com.github.barteksc.pdfviewer.util.Constants;
 import com.github.barteksc.pdfviewer.util.FitPolicy;
 import com.github.barteksc.pdfviewer.util.MathUtils;
+import com.github.barteksc.pdfviewer.util.SearchUtils;
+import com.github.barteksc.pdfviewer.util.SentenceExtractor;
 import com.github.barteksc.pdfviewer.util.SnapEdge;
 import com.github.barteksc.pdfviewer.util.Util;
 import com.vivlio.android.pdfium.PdfDocument;
@@ -2035,6 +2038,21 @@ public class PDFView extends RelativeLayout {
             return Collections.emptyList();
         }
         return pdfFile.getBookmarks();
+    }
+
+    public List<SentencedSearchResult> getSearchResults(int page) {
+        return getSearchResults(page, null);
+    }
+
+    public List<SentencedSearchResult> getSearchResults(int page, SentenceExtractor extractor) {
+        SearchRecord searchRecord = searchRecords.get(page);
+        if (pdfFile == null || pdfiumCore == null || searchRecord == null) {
+            return Collections.emptyList();
+        }
+        long textPtr = pdfFile.getTextPage(searchRecord.pageIdx);
+        String pageText = pdfiumCore.nativeGetText(textPtr);
+        List<SearchRecordItem> items = searchRecord.data;
+        return SearchUtils.extractSearchResults(textPtr, pageText, items, extractor);
     }
 
     /**
