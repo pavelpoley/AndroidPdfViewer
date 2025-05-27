@@ -12,4 +12,6 @@
     <string name="search_navigation_placeholder">%d of %d</string>
     <string name="table_of_contents">Table of Contents</string>
     <string name="expand">expand</string>
+    <string name="show_search_result">Show Search Result</string>
+    <string name="page_placeholder">Page: %d</string>
 </resources>

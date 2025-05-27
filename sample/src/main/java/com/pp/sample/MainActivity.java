@@ -1,6 +1,5 @@
 package com.pp.sample;
 
-import android.annotation.SuppressLint;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
@@ -25,6 +24,7 @@ import androidx.activity.EdgeToEdge;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.SearchView;
 import androidx.core.graphics.Insets;
@@ -40,6 +40,8 @@ import com.github.barteksc.pdfviewer.scroll.DefaultScrollHandle;
 import com.google.android.material.bottomsheet.BottomSheetBehavior;
 import com.pp.sample.databinding.ActivityMainBinding;
 import com.pp.sample.databinding.LayoutMenuPopupTextSelectionBinding;
+
+import java.util.concurrent.Executors;
 
 @SuppressWarnings("unused")
 public class MainActivity extends AppCompatActivity {
@@ -66,7 +68,6 @@ public class MainActivity extends AppCompatActivity {
     private BottomSheetBehavior<View> bottomSheetBehavior;
 
 
-    @SuppressLint("NewApi")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -106,6 +107,24 @@ public class MainActivity extends AppCompatActivity {
                 updateSearchNavigation();
             }
         });
+
+        binding.showAllSearchResult.setOnClickListener(v -> {
+            var e = Executors.newSingleThreadExecutor();
+            v.setEnabled(false);
+            e.execute(() -> {
+                SearchResultsCacheManager.saveSearchResultsToFile(this, pdfView);
+                runOnUiThread(() -> {
+                    v.setEnabled(true);
+                    var intent = new Intent(this, PdfSearchResultActivity.class);
+                    intent.putExtra("data", "serialized");
+                    startActivityForResult(intent, 7);
+                    searchView.clearFocus();
+                });
+                e.shutdown();
+            });
+        });
+
+
         pdfView.setSelectionPaintView(binding.docSelection);
         binding.docSelection
                 .modifySelectionUi()
@@ -121,6 +140,25 @@ public class MainActivity extends AppCompatActivity {
         binding.openFile.setOnClickListener(v -> launcher.launch("application/pdf"));
         binding.closeTableOfContent.setOnClickListener(v ->
                 bottomSheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN));
+    }
+
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+
+        if (requestCode == 7 && resultCode == RESULT_OK && data != null) {
+            int page = data.getIntExtra("pageIndex", 0);
+            float xOffset = data.getFloatExtra("xOffset", 0f);
+            float yOffset = data.getFloatExtra("yOffset", 0f);
+            Log.d(TAG, "onActivityResult: " + xOffset + " ," + yOffset);
+            binding.pdfView.jumpToWithOffset(
+                    page,
+                    xOffset,
+                    yOffset
+            );
+        }
+
     }
 
     private void updateSearchNavigation() {
@@ -218,7 +256,7 @@ public class MainActivity extends AppCompatActivity {
                 : binding.pdfView.fromUri(uri)
         ).scrollHandle(new DefaultScrollHandle(this))
                 .enableSwipe(true)
-                .swipeHorizontal(true)
+                .swipeHorizontal(false)
                 .enableDoubleTap(true)
                 .defaultPage(0)
                 .onPageScroll((page, positionOffset) -> hidePopupMenu())
@@ -281,6 +319,8 @@ public class MainActivity extends AppCompatActivity {
     protected void onDestroy() {
         binding = null;
         menuBinding = null;
+        SearchResultsCacheManager
+                .deleteSearchResultsCache(this);
         super.onDestroy();
     }
 

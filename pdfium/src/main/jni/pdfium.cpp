@@ -1028,6 +1028,27 @@ JNI_FUNC(jint, PdfiumCore, nativeCountRects)(JNI_ARGS, jlong textPtr, jint st, j
     return FPDFText_CountRects((FPDF_TEXTPAGE) textPtr, st, ed);
 }
 
+JNI_FUNC(jlong, PdfiumCore, nativeGetTextOffset)(JNI_ARGS, jlong textPtr, jint st, jint ed) {
+    auto textPage = reinterpret_cast<FPDF_TEXTPAGE>(textPtr);
+    int rects = FPDFText_CountRects(textPage, st, ed);
+    if (rects == 0) {
+//        LOGE("No rects found");
+        return 0;
+    }
+
+    double left, top, right, bottom;
+    if (FPDFText_GetRect(textPage, 0, &left, &top, &right, &bottom)) {
+        auto centerX = static_cast<float>(left);
+        auto yBottom = static_cast<float>(top);
+        int xBits = *reinterpret_cast<int *>(&centerX);
+        int yBits = *reinterpret_cast<int *>(&yBottom);
+        auto res = (static_cast<jlong>(xBits) << 32) | (yBits & 0xFFFFFFFFL);
+//        LOGD("%f %f %lld", centerX, yBottom, res);
+        return res;
+    }
+    return 0;
+}
+
 JNI_FUNC(jboolean, PdfiumCore, nativeGetRect)(JNI_ARGS, jlong pagePtr, jint offsetY, jint offsetX,
                                               jint width, jint height, jlong textPtr, jobject rect,
                                               jint idx) {

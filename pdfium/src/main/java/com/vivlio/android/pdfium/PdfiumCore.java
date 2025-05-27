@@ -4,6 +4,7 @@ import android.annotation.SuppressLint;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Point;
+import android.graphics.PointF;
 import android.graphics.RectF;
 import android.os.ParcelFileDescriptor;
 import android.util.Log;
@@ -180,6 +181,29 @@ public class PdfiumCore {
     public native void nativeFindTextPageEnd(long searchPtr);
 
     public native int nativeCountRects(long textPtr, int st, int ed);
+
+    /**
+     * Example unpacking:
+     * <pre>
+     *     int xBits = (int) (offset >> 32);
+     *     int yBits = (int) offset;
+     *     float x = Float.intBitsToFloat(xBits);
+     *     float y = Float.intBitsToFloat(yBits);
+     * </pre>
+     * @return two floats: (x,y)
+     * @see #nativeGetTextOffset(long, int, int, PointF)
+     *
+     */
+    public static native long nativeGetTextOffset(long textPtr, int st, int ed);
+
+    public static void nativeGetTextOffset(long textPtr, int st, int ed, PointF out) {
+        long offset = nativeGetTextOffset(textPtr, st, ed);
+        int xBits = (int) (offset >> 32);
+        int yBits = (int) offset;
+        out.x = Float.intBitsToFloat(xBits);
+        out.y = Float.intBitsToFloat(yBits);
+    }
+
 
     public native boolean nativeGetRect(long pagePtr, int offsetY, int offsetX, int width, int height, long textPtr, RectF rect, int idx);
 
