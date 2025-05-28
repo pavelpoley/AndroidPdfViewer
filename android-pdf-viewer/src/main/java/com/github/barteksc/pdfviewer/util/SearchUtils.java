@@ -2,7 +2,6 @@ package com.github.barteksc.pdfviewer.util;
 
 import com.github.barteksc.pdfviewer.model.SearchRecordItem;
 import com.github.barteksc.pdfviewer.model.SentencedSearchResult;
-import com.vivlio.android.pdfium.PdfiumCore;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -27,7 +26,6 @@ public class SearchUtils {
     /**
      * Extracts search results with sentence context using a custom or default sentence extractor.
      *
-     * @param textPtr           Native text page pointer.
      * @param pageText          Full text of the page.
      * @param searchItems       List of search result entries.
      * @param sentenceExtractor Optional custom sentence extractor implementation.
@@ -35,7 +33,6 @@ public class SearchUtils {
      * @throws IllegalArgumentException if the sentence extractor returns invalid bounds.
      */
     public static List<SentencedSearchResult> extractSearchResults(
-            long textPtr,
             String pageText,
             List<SearchRecordItem> searchItems,
             SentenceExtractor sentenceExtractor
@@ -48,7 +45,8 @@ public class SearchUtils {
         }
 
         List<SentencedSearchResult> results = new ArrayList<>();
-        for (SearchRecordItem item : searchItems) {
+        for (int itemIndex = 0, searchItemsSize = searchItems.size(); itemIndex < searchItemsSize; itemIndex++) {
+            SearchRecordItem item = searchItems.get(itemIndex);
             int start = item.st;
             int end = start + item.ed;
 
@@ -82,16 +80,9 @@ public class SearchUtils {
             int relativeStartIndex = Math.max(0, start - sentenceStart);
             int relativeEndIndex = Math.min(snippet.length(), end - sentenceStart);
 
-            long offset = PdfiumCore.nativeGetTextOffset(textPtr, item.st, item.ed);
-            int xBits = (int) (offset >> 32);
-            int yBits = (int) offset;
-            float x = Float.intBitsToFloat(xBits);
-            float y = Float.intBitsToFloat(yBits);
-
             results.add(new SentencedSearchResult(
                     item.pageIndex,
-                    x,
-                    y,
+                    itemIndex,
                     snippet,
                     relativeStartIndex,
                     relativeEndIndex

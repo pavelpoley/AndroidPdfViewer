@@ -50,11 +50,10 @@ public class PdfSearchResultActivity extends AppCompatActivity {
         });
         executor.shutdown();
 
-        adapter.setOnItemClickListener(item -> {
+        adapter.setOnItemClickListener((item, position) -> {
             Intent intent = new Intent();
-            intent.putExtra("pageIndex", item.getPageIndex());
-            intent.putExtra("xOffset", item.getxOffset());
-            intent.putExtra("yOffset", item.getyOffset());
+            intent.putExtra("recordId", item.getRecordId());
+            intent.putExtra("recordIndex", position);
             setResult(RESULT_OK, intent);
             finish();
         });
