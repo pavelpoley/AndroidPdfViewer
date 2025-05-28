@@ -146,17 +146,13 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-
         if (requestCode == 7 && resultCode == RESULT_OK && data != null) {
-            int page = data.getIntExtra("pageIndex", 0);
-            float xOffset = data.getFloatExtra("xOffset", 0f);
-            float yOffset = data.getFloatExtra("yOffset", 0f);
-            Log.d(TAG, "onActivityResult: " + xOffset + " ," + yOffset);
-            binding.pdfView.jumpToWithOffset(
-                    page,
-                    xOffset,
-                    yOffset
-            );
+            long recordId = data.getLongExtra("recordId", 0L);
+            int recordIndex = data.getIntExtra("recordIndex", 0);
+            if (binding.pdfView.navigateToSearchItem(recordId, true)) {
+                this.currentSearchItemIndex = recordIndex;
+                updateSearchNavigation();
+            }
         }
 
     }

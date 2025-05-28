@@ -28,9 +28,7 @@ public class SearchResultsCacheManager {
                 allResults.addAll(pageResults);
             }
         }
-
         File file = new File(context.getCacheDir(), CACHE_FILENAME);
-
         try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(file))) {
             oos.writeObject(allResults);
             oos.flush();

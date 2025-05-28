@@ -52,7 +52,7 @@ public class PdfSearchListAdapter extends ListAdapter<SentencedSearchResult, Pdf
     @Override
     public void onBindViewHolder(@NonNull PdfSearchResultViewHolder holder, int position) {
         SentencedSearchResult item = getItem(position);
-        holder.bind(item, onItemClickListener);
+        holder.bind(item, position, onItemClickListener);
     }
 
     @Override
@@ -68,23 +68,26 @@ public class PdfSearchListAdapter extends ListAdapter<SentencedSearchResult, Pdf
 
         private OnItemClickListener onItemClickListener;
         private SentencedSearchResult model;
+        private int position = -1;
 
         public PdfSearchResultViewHolder(@NonNull ListItemPdfSearchResultBinding binding) {
             super(binding.getRoot());
             this.binding = binding;
             binding.getRoot().setOnClickListener(v -> {
                 if (onItemClickListener != null && model != null) {
-                    onItemClickListener.onItemClick(model);
+                    onItemClickListener.onItemClick(model, position);
                 }
             });
         }
 
         public void bind(
                 SentencedSearchResult model,
+                int position,
                 OnItemClickListener onItemClickListener
         ) {
             this.onItemClickListener = onItemClickListener;
             this.model = model;
+            this.position = position;
             binding.listItemPdfSearchResultText.setText(model.getSpannedText(Color.YELLOW));
             binding.listItemPdfSearchResultPage.setText(binding.getRoot().getContext().getString(R.string.page_placeholder, model.getPageIndex() + 1));
         }
@@ -99,6 +102,6 @@ public class PdfSearchListAdapter extends ListAdapter<SentencedSearchResult, Pdf
     }
 
     public interface OnItemClickListener {
-        void onItemClick(SentencedSearchResult item);
+        void onItemClick(SentencedSearchResult item, int position);
     }
 }

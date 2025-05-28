@@ -155,7 +155,7 @@ public class PDFView extends RelativeLayout {
 
     SearchRecordItem currentFocusedSearchItem = null;
     private int index = -1;
-    private int currentMatchedWordIndex = 0;
+    //    private int currentMatchedWordIndex = 0;
     private int searchMatchedCount = 0;
 
 
@@ -498,7 +498,6 @@ public class PDFView extends RelativeLayout {
     // Search methods
     public void search(@Nullable String text) {
         searchMatchedCount = 0;
-        currentMatchedWordIndex = 0;
         searchRecords.clear();
         currentFocusedSearchItem = null;
         index = -1;
@@ -506,7 +505,6 @@ public class PDFView extends RelativeLayout {
             closeTask();
         }
         if (TextUtils.isEmpty(text)) return;
-
         setIsSearching(true);
         task = new PDocSearchTask(this, text);
         task.start();
@@ -519,10 +517,14 @@ public class PDFView extends RelativeLayout {
     }
 
 
+    public boolean navigateToNextSearchItem() {
+        return navigateToNextSearchItem(false);
+    }
+
     /**
      * @return true if navigated
      */
-    public boolean navigateToNextSearchItem() {
+    public boolean navigateToNextSearchItem(boolean jumpToPageWithOffset) {
         if (this.currentFocusedSearchItem == null || index == -1) return false;
         var page = this.currentFocusedSearchItem.pageIndex;
         var record = searchRecords.get(page);
@@ -531,7 +533,6 @@ public class PDFView extends RelativeLayout {
         if (ArrayUtils.isValidIndex(record.data, nextIndex)) {
             currentFocusedSearchItem = record.data.get(nextIndex);
             index = nextIndex;
-            currentMatchedWordIndex = nextIndex;
             jumpTo(page, true);
             redrawSel();
             return true;
@@ -543,7 +544,6 @@ public class PDFView extends RelativeLayout {
                 if (item != null) {
                     currentFocusedSearchItem = item;
                     index = 0;
-                    currentMatchedWordIndex += 1;
                     jumpTo(i, true);
                     redrawSel();
                     return true;
@@ -553,11 +553,92 @@ public class PDFView extends RelativeLayout {
         return false;
     }
 
+    public boolean navigateToSearchItem(SentencedSearchResult result, boolean jumpToPageWithOffset) {
+        return navigateToSearchItem(
+                result.getPageIndex(),
+                result.getSearchItemIndex(),
+                jumpToPageWithOffset);
+    }
+
+    public boolean navigateToSearchItem(long recordId, boolean jumpToPageWithOffset) {
+        int pageIndex = SentencedSearchResult.unpackPageIndex(recordId);
+        int searchItemIndex = SentencedSearchResult.unpackSearchItemIndex(recordId);
+        return navigateToSearchItem(pageIndex, searchItemIndex, jumpToPageWithOffset);
+    }
+
+    public boolean navigateToSearchItem(int pageIndex, int searchItemIndex, boolean jumpToPageWithOffset) {
+        var page = pdfFile.determineValidPageNumberFrom(pageIndex);
+        var record = searchRecords.get(page);
+        if (record == null || record.data == null) return false;
+        var item = ArrayUtils.getElementSafe(record.data, searchItemIndex);
+        if (item == null) return false;
+        currentFocusedSearchItem = item;
+        index = searchItemIndex;
+        jumpToSearchedItem(pageIndex, item, true, false);
+        redrawSel();
+        return true;
+    }
+
+    public boolean navigateToSearchItem(int pageIndex, int searchItemIndex) {
+        return navigateToSearchItem(pageIndex, searchItemIndex, false);
+    }
+
+    public boolean navigateToPreviousSearchItem() {
+        return navigateToPreviousSearchItem(false);
+    }
+
+    private void jumpToSearchedItem(int page,
+                                    SearchRecordItem item,
+                                    boolean withOffset,
+                                    boolean withAnim) {
+        if (withOffset) {
+            long offset = PdfiumCore.nativeGetTextOffset(pdfFile.getTextPage(page), item.st, item.ed);
+            if (offset == 0L) {
+                jumpTo(page, withAnim);
+            } else {
+                float x = Float.intBitsToFloat((int) (offset >> 32));
+                float y = Float.intBitsToFloat((int) offset);
+                jumpToWithOffset(page, x, y);
+            }
+        } else {
+            jumpTo(page, withAnim);
+        }
+    }
+
+
+    /**
+     * Finds the 0-based linear index position of the currently focused search item
+     * across all pages and records.
+     *
+     * <p><strong>Note:</strong> This method is computationally expensive and should be used sparingly.
+     * It performs a full scan through all pages and their data, which can be costly for large datasets
+     * (e.g., a PDF with 1 million pages).</p>
+     *
+     * @return The 0-based index of the current focused search item, or -1 if not found.
+     */
+    public int findCurrentSearchedItemPosition() {
+        int pos = -1;
+        if (currentFocusedSearchItem != null) {
+            for (int page = 0; page < getPageCount(); page++) {
+                SearchRecord record = searchRecords.get(page);
+                if (record == null || record.data == null) continue;
+                for (int i = 0; i < record.data.size(); i++) {
+                    SearchRecordItem item = record.data.get(i);
+                    pos += 1;
+                    if (item == currentFocusedSearchItem) {
+                        return pos;
+                    }
+                }
+            }
+        }
+        return -1;
+    }
+
 
     /**
      * @return true if navigated
      */
-    public boolean navigateToPreviousSearchItem() {
+    public boolean navigateToPreviousSearchItem(boolean jumpToPageWithOffset) {
         boolean navigated = false;
 
         if (currentFocusedSearchItem == null || index == -1) return false;
@@ -570,6 +651,7 @@ public class PDFView extends RelativeLayout {
         if (ArrayUtils.isValidIndex(record.data, prevIndex)) {
             currentFocusedSearchItem = record.data.get(prevIndex);
             index = prevIndex;
+            jumpToSearchedItem(page, currentFocusedSearchItem, jumpToPageWithOffset, true);
             redrawSel();
             return true;
         }
@@ -581,8 +663,7 @@ public class PDFView extends RelativeLayout {
                 if (item != null) {
                     currentFocusedSearchItem = item;
                     index = lastIndex;
-                    currentMatchedWordIndex -= 1;
-                    jumpTo(i, true);
+                    jumpToSearchedItem(i, item, jumpToPageWithOffset, true);
                     redrawSel();
                     return true;
                 }
@@ -794,7 +875,6 @@ public class PDFView extends RelativeLayout {
         if (pdfFile == null) {
             return;
         }
-
         page = pdfFile.determineValidPageNumberFrom(page);
         float offset = page == 0 ? 0 : -pdfFile.getPageOffset(page, zoom);
         if (page == 0 && initialRender) {
@@ -827,6 +907,10 @@ public class PDFView extends RelativeLayout {
     }
 
     public void jumpToWithOffset(int page, float rawX, float rawY) {
+        if (rawX == 0f && rawY == 0f) {
+            jumpTo(page);
+            return;
+        }
         var pageIndex = pdfFile.determineValidPageNumberFrom(page);
         var originalPageSize = pdfFile.getOriginalPageSize(pageIndex);
         var pageSize = pdfFile.getPageSize(pageIndex);
@@ -2052,7 +2136,7 @@ public class PDFView extends RelativeLayout {
         long textPtr = pdfFile.getTextPage(searchRecord.pageIdx);
         String pageText = pdfiumCore.nativeGetText(textPtr);
         List<SearchRecordItem> items = searchRecord.data;
-        return SearchUtils.extractSearchResults(textPtr, pageText, items, extractor);
+        return SearchUtils.extractSearchResults(pageText, items, extractor);
     }
 
     /**
