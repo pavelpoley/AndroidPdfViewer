@@ -86,6 +86,7 @@ public class Callbacks {
     private Runnable onSelectionListener;
 
     private OnSelectionListener onSelectionEndedListener;
+    private OnTextSelectionListener onTextSelectionListener;
 
     /**
      * Call back to call when user search text
@@ -219,15 +220,27 @@ public class Callbacks {
         this.onSelectionEndedListener = onSelectionEndedListener;
     }
 
+    public void setOnTextSelectionEndedListener(OnTextSelectionListener onTextSelectionListener) {
+        this.onTextSelectionListener = onTextSelectionListener;
+    }
+
     public void callIsTextSelectionInProgress() {
         if (onSelectionListener != null) {
             onSelectionListener.run();
         }
     }
 
-    public void callOnSelectionEnded(String text, RectF rectF) {
+    public boolean hasTextSelectionListener() {
+        return this.onTextSelectionListener != null || this.onSelectionListener != null;
+    }
+
+    public void callOnSelectionEnded(String text, int page, long recordId, RectF rectF) {
         if (onSelectionEndedListener != null) {
             onSelectionEndedListener.onSelection(text, rectF);
+        }
+
+        if (this.onTextSelectionListener != null) {
+            this.onTextSelectionListener.onSelection(text, page, recordId, rectF);
         }
     }
 

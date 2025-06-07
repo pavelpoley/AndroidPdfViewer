@@ -32,6 +32,7 @@ import androidx.annotation.NonNull;
 import com.github.barteksc.pdfviewer.model.LinkTapEvent;
 import com.github.barteksc.pdfviewer.scroll.ScrollHandle;
 import com.github.barteksc.pdfviewer.util.SnapEdge;
+import com.github.barteksc.pdfviewer.util.Util;
 import com.vivlio.android.pdfium.PdfDocument;
 import com.vivlio.android.pdfium.util.Size;
 import com.vivlio.android.pdfium.util.SizeF;
@@ -227,6 +228,10 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
 
     public void getSelRects(ArrayList<RectF> rectPagePool, int selSt, int selEd) {
         int page = pdfView.getPageNumberAtScreen(lastX, lastY);
+        getSelRects(rectPagePool, page, selSt, selEd);
+    }
+
+    public void getSelRects(ArrayList<RectF> rectPagePool, int page, int selSt, int selEd) {
         long tid = prepareText(page);
         if (pdfView.isNotCurrentPage(tid)) {
             return;
@@ -432,6 +437,7 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
         }
         if (wordTapped(e.getX(), e.getY(), 2.5f)) {
             pdfView.hasSelection = true;
+            Log.d(TAG, "onLongPress: START");
             draggingState = DraggingState.NONE;
             sCursorPosStart.set(pdfView.handleRightPos.right, pdfView.handleRightPos.bottom);
             pdfView.callbacks.callIsTextSelectionInProgress();
@@ -581,6 +587,7 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
     private void stopTextSelection() {
         if (draggingState != DraggingState.NONE) {
             draggingState = DraggingState.NONE;
+            Log.d(TAG, "stopTextSelection: Stop");
         }
         pdfView.selectionPaintView.dismissMagnifier();
         int startSelectedIndex = pdfView.selStart;
@@ -588,9 +595,11 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
         pdfView.selStart = Math.min(startSelectedIndex, endSelectionIndex);
         pdfView.selEnd = Math.max(startSelectedIndex, endSelectionIndex);
         pdfView.startInDrag = false;
-        if (pdfView.hasSelection) {
+        if (pdfView.hasSelection && this.pdfView.callbacks.hasTextSelectionListener()) {
             pdfView.callbacks.callOnSelectionEnded(
                     pdfView.getSelection(),
+                    pdfView.selPageSt,
+                    Util.packIntegers(pdfView.selStart, pdfView.selEnd),
                     pdfView.selectionPaintView.getRectFMappedToScreen()
             );
         }

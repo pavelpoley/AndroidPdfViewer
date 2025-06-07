@@ -70,6 +70,7 @@ import com.github.barteksc.pdfviewer.listener.OnSearchEndListener;
 import com.github.barteksc.pdfviewer.listener.OnSearchMatchListener;
 import com.github.barteksc.pdfviewer.listener.OnSelectionListener;
 import com.github.barteksc.pdfviewer.listener.OnTapListener;
+import com.github.barteksc.pdfviewer.listener.OnTextSelectionListener;
 import com.github.barteksc.pdfviewer.model.Decoration;
 import com.github.barteksc.pdfviewer.model.PagePart;
 import com.github.barteksc.pdfviewer.model.SearchRecord;
@@ -906,6 +907,21 @@ public class PDFView extends RelativeLayout {
         jumpTo(page, false);
     }
 
+    public void jumpAndHighlightArea(int page, long selectionId) {
+        int startIndex = Util.unpackHigh(selectionId);
+        int endIndex = Util.unpackLow(selectionId);
+        if (startIndex < 0 || endIndex <= startIndex) return;
+        long textPtr = pdfFile.getTextPage(page);
+        if (textPtr == 0L) return;
+        jumpTo(page);
+        boolean enabled = pageSnap;
+        setPageSnap(true);
+        performPageSnap();
+        setPageSnap(enabled);
+        dragPinchManager.currentTextPtr = textPtr;
+        setSelectionAtPage(page, startIndex, endIndex);
+    }
+
     public void jumpToWithOffset(int page, float rawX, float rawY) {
         if (rawX == 0f && rawY == 0f) {
             jumpTo(page);
@@ -1385,14 +1401,14 @@ public class PDFView extends RelativeLayout {
                     int endCharIndex = Math.max(selStart, selEnd);
 
                     if (pageCount == 0) {
-                        dragPinchManager.prepareText();
+                        dragPinchManager.prepareText(selPageSt);
                         int newSelEnd = Math.min(endCharIndex, dragPinchManager.allText.length());
                         return dragPinchManager.allText.substring(startCharIndex, newSelEnd);
                     }
                     StringBuilder sb = new StringBuilder();
                     int selCount = 0;
                     for (int i = 0; i <= pageCount; i++) {
-                        dragPinchManager.prepareText();
+                        dragPinchManager.prepareText(selPageSt + i);
                         int len = dragPinchManager.allText.length();
                         selCount += i == 0 ? len - startCharIndex : i == pageCount ? endCharIndex : len;
                     }
@@ -2222,7 +2238,10 @@ public class PDFView extends RelativeLayout {
         private OnScaleListener onScaleListener;
 
         private Runnable onSelectionListener;
+
         private OnSelectionListener onSelectionEndedListener;
+
+        private OnTextSelectionListener onTextSelectionEndedListener;
 
         private OnSearchBeginListener onSearchBeginListener;
 
@@ -2351,6 +2370,11 @@ public class PDFView extends RelativeLayout {
 
         public Configurator onSelection(OnSelectionListener onSelectionListener) {
             this.onSelectionEndedListener = onSelectionListener;
+            return this;
+        }
+
+        public Configurator onTextSelection(OnTextSelectionListener onTextSelectionListener) {
+            this.onTextSelectionEndedListener = onTextSelectionListener;
             return this;
         }
 
@@ -2491,6 +2515,7 @@ public class PDFView extends RelativeLayout {
             PDFView.this.callbacks.setOnScale(onScaleListener);
             PDFView.this.callbacks.setOnSelection(onSelectionListener);
             PDFView.this.callbacks.setOnSelectionEndedListener(onSelectionEndedListener);
+            PDFView.this.callbacks.setOnTextSelectionEndedListener(onTextSelectionEndedListener);
             PDFView.this.callbacks.setOnSearchBegin(onSearchBeginListener);
             PDFView.this.callbacks.setOnSearchEnd(onSearchEndListener);
             PDFView.this.callbacks.setOnSearchMatch(onSearchMatchListener);

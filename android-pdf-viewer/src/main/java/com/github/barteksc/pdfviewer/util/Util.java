@@ -17,15 +17,12 @@ package com.github.barteksc.pdfviewer.util;
 
 import android.content.Context;
 
-import androidx.annotation.NonNull;
 import androidx.core.util.TypedValueCompat;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
 
 public class Util {
     private static final int DEFAULT_BUFFER_SIZE = 1024 * 4;
@@ -57,6 +54,32 @@ public class Util {
     }
 
 
+    public static long packIntegers(int high, int low) {
+        return ((long) high << 32) | (low & 0xFFFFFFFFL);
+    }
 
+    public static int unpackHigh(long packed) {
+        return (int) (packed >>> 32);
+    }
+
+    public static int unpackLow(long packed) {
+        return (int) packed;
+    }
+
+    public static long packFloats(float f1, float f2) {
+        int bits1 = Float.floatToIntBits(f1);
+        int bits2 = Float.floatToIntBits(f2);
+        return ((long) bits1 << 32) | (bits2 & 0xFFFFFFFFL);
+    }
+
+    public static float unpackFirstFloat(long packed) {
+        int bits1 = (int) (packed >>> 32);
+        return Float.intBitsToFloat(bits1);
+    }
+
+    public static float unpackSecondFloat(long packed) {
+        int bits2 = (int) packed;
+        return Float.intBitsToFloat(bits2);
+    }
 
 }

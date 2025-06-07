@@ -159,7 +159,7 @@ public class PDocSelection extends View {
                 int selEd = i == pageCount ? pdfView.selEnd : -1;
                 // PDocument.PDocPage page = pDocView.pdfFile.mPDocPages[selPageSt + i];
 
-                pdfView.dragPinchManager.getSelRects(rectPagePool, selSt, selEd);//+10
+                pdfView.dragPinchManager.getSelRects(rectPagePool, pdfView.selPageSt + i, selSt, selEd);//+10
             }
             recalculateHandles();
             rectPoolSize = pageCount + 1;

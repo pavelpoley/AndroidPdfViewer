@@ -30,6 +30,7 @@ android {
         sourceCompatibility JavaVersion.VERSION_11
         targetCompatibility JavaVersion.VERSION_11
     }
+    ndkVersion '28.1.13356709'
     externalNativeBuild {
         cmake {
             path file('src/main/jni/CMakeLists.txt')
@@ -51,7 +52,7 @@ project.afterEvaluate {
             libraryProject(MavenPublication) {
                 groupId 'com.github.pavelpoley'
                 artifactId 'pdfium-android'
-                version '1.0.0'
+                version '1.0.1'
                 artifact bundleReleaseAar
             }
         }

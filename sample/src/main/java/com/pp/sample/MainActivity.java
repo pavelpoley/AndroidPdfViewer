@@ -137,7 +137,10 @@ public class MainActivity extends AppCompatActivity {
 
 
         binding.closeSearchBtn.setOnClickListener(v -> resetAndCloseSearchView());
-        binding.openFile.setOnClickListener(v -> launcher.launch("application/pdf"));
+        binding.openFile.setOnClickListener(v -> {
+//            launcher.launch("application/pdf");
+            highlightArea();
+        });
         binding.closeTableOfContent.setOnClickListener(v ->
                 bottomSheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN));
     }
@@ -257,7 +260,7 @@ public class MainActivity extends AppCompatActivity {
                 .defaultPage(0)
                 .onPageScroll((page, positionOffset) -> hidePopupMenu())
                 .spacing(10)
-                .onSelection(this::onTextSelected)
+                .onTextSelection(this::onTextSelected)
                 .onSelectionInProgress(this::hidePopupMenu)
                 .onSearchMatch((page, totalMatched, word) -> {
                     totalSearchItems += totalMatched;
@@ -280,8 +283,19 @@ public class MainActivity extends AppCompatActivity {
         configurator.load();
     }
 
+    int page;
+    long id;
 
-    private void onTextSelected(String selectedText, RectF selectionRect) {
+    private void highlightArea() {
+        this.binding.pdfView.clearSelection();
+        this.binding.pdfView.jumpAndHighlightArea(page, id);
+    }
+
+    private void onTextSelected(String selectedText, int page, long id, RectF selectionRect) {
+        this.page = page;
+        this.id = id;
+        Log.d(TAG, "onTextSelected: Callback =>" + page);
+        Log.d(TAG, "onTextSelected: PDF Page =>" + binding.pdfView.getCurrentPage());
         hidePopupMenu();
         if (debounceRunnable != null) {
             debounceHandler.removeCallbacks(debounceRunnable);
