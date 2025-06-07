@@ -36,10 +36,15 @@ add_library(pdfium SHARED
 #add_library(modpng SHARED IMPORTED)
 #set_target_properties(modpng PROPERTIES IMPORTED_LOCATION ${CMAKE_SOURCE_DIR}/lib/${ANDROID_ABI}/libmodpng.so)
 
-add_library(pdfsdk SHARED IMPORTED)
-set_target_properties(pdfsdk PROPERTIES
-        IMPORTED_LOCATION
-        ${CMAKE_SOURCE_DIR}/lib/${ANDROID_ABI}/libpdfsdk.so)
+#add_library(pdfsdk SHARED IMPORTED)
+#set_target_properties(pdfsdk PROPERTIES
+#        IMPORTED_LOCATION
+#        ${CMAKE_SOURCE_DIR}/lib/${ANDROID_ABI}/libpdfsdk.so)
+
+
+add_library(libpdfium SHARED IMPORTED)
+set_target_properties(libpdfium PROPERTIES IMPORTED_LOCATION
+        ${CMAKE_SOURCE_DIR}/lib/${ANDROID_ABI}/libpdfium.cr.so)
 
 find_library(log-lib log)
 find_library(jnigraphics-lib jnigraphics)
@@ -51,7 +56,9 @@ find_library(android-lib android)
 # build script, prebuilt third-party libraries, or system libraries.
 
 target_link_libraries(pdfium
-        PRIVATE pdfsdk
+#        PRIVATE pdfsdk
+        libpdfium
         ${log-lib}
         ${jnigraphics-lib}
         ${android-lib})
+

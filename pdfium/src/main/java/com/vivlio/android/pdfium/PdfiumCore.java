@@ -36,8 +36,9 @@ public class PdfiumCore {
 
     static {
         try {
-            System.loadLibrary("pdfsdk");
+//            System.loadLibrary("pdfsdk");
             System.loadLibrary("pdfium");
+            System.loadLibrary("libpdfium");
         } catch (UnsatisfiedLinkError e) {
             Log.e(TAG, "Native libraries failed to load - " + e);
         }
