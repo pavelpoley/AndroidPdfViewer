@@ -829,16 +829,24 @@ public class PDFView extends RelativeLayout {
         SizeF size = pdfFile.getPageSize(page);
         if (st >= 0 && ed > 0) {
             int rectCount = pdfiumCore.nativeCountRects(tid, st, ed);
+            long firstOffset = 0L;
             if (rectCount > 0) {
                 RectF[] rectFS = new RectF[rectCount];
                 for (int i = 0; i < rectCount; i++) {
                     RectF rI = new RectF();
-                    pdfiumCore.nativeGetRect(pid, 0, 0,
+                    long offset = pdfiumCore.nativeGetRect(pid, 0, 0,
                             (int) size.getWidth(), (int) size.getHeight(),
                             tid, rI, i);
                     rectFS[i] = rI;
+                    if (i == 0) {
+                        firstOffset = offset;
+                    }
                 }
-                data.add(new SearchRecordItem(page, st, ed, rectFS));
+                int xBits = (int) (firstOffset >> 32);
+                int yBits = (int) firstOffset;
+                float x = Float.intBitsToFloat(xBits);
+                float y = Float.intBitsToFloat(yBits);
+                data.add(new SearchRecordItem(page, st, ed, rectFS, x, y));
             }
         }
     }

@@ -1,8 +1,14 @@
 package com.vivlio.android.pdfium;
 
+import android.os.Parcel;
+import android.os.Parcelable;
+
 import androidx.annotation.NonNull;
 
-public class TOCEntry {
+public class TOCEntry implements Parcelable, java.io.Serializable {
+
+    @java.io.Serial
+    private static final long serialVersionUID = 8254565845856584565L;
     private final String title;
     private final int pageIndex;
     private final int level;
@@ -22,6 +28,44 @@ public class TOCEntry {
         this.y = y;
         this.zoom = zoom;
     }
+
+    protected TOCEntry(Parcel in) {
+        title = in.readString();
+        pageIndex = in.readInt();
+        level = in.readInt();
+        parentIndex = in.readInt();
+        x = in.readFloat();
+        y = in.readFloat();
+        zoom = in.readFloat();
+    }
+
+    @Override
+    public void writeToParcel(Parcel dest, int flags) {
+        dest.writeString(title);
+        dest.writeInt(pageIndex);
+        dest.writeInt(level);
+        dest.writeInt(parentIndex);
+        dest.writeFloat(x);
+        dest.writeFloat(y);
+        dest.writeFloat(zoom);
+    }
+
+    @Override
+    public int describeContents() {
+        return 0;
+    }
+
+    public static final Creator<TOCEntry> CREATOR = new Creator<TOCEntry>() {
+        @Override
+        public TOCEntry createFromParcel(Parcel in) {
+            return new TOCEntry(in);
+        }
+
+        @Override
+        public TOCEntry[] newArray(int size) {
+            return new TOCEntry[size];
+        }
+    };
 
     public String getTitle() {
         return title;
@@ -45,6 +89,14 @@ public class TOCEntry {
     }
 
     public float getY() {
+        return y;
+    }
+
+    public float getRawX() {
+        return x;
+    }
+
+    public float getRawY() {
         return y;
     }
 

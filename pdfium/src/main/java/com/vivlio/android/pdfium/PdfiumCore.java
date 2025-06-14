@@ -191,9 +191,9 @@ public class PdfiumCore {
      *     float x = Float.intBitsToFloat(xBits);
      *     float y = Float.intBitsToFloat(yBits);
      * </pre>
+     *
      * @return two floats: (x,y)
      * @see #nativeGetTextOffset(long, int, int, PointF)
-     *
      */
     public static native long nativeGetTextOffset(long textPtr, int st, int ed);
 
@@ -206,7 +206,18 @@ public class PdfiumCore {
     }
 
 
-    public native boolean nativeGetRect(long pagePtr, int offsetY, int offsetX, int width, int height, long textPtr, RectF rect, int idx);
+    /**
+     * Example unpacking:
+     * <pre>
+     *     int xBits = (int) (offset >> 32);
+     *     int yBits = (int) offset;
+     *     float x = Float.intBitsToFloat(xBits);
+     *     float y = Float.intBitsToFloat(yBits);
+     * </pre>
+     *
+     * @return two floats: (x,y)
+     */
+    public native long nativeGetRect(long pagePtr, int offsetY, int offsetX, int width, int height, long textPtr, RectF rect, int idx);
 
     public native int nativeFindTextPage(long pagePtr, String key, int flag);
 

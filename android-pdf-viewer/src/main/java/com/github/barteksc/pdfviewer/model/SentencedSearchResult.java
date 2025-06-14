@@ -7,15 +7,24 @@ import android.text.Spanned;
 import android.text.style.BackgroundColorSpan;
 
 import androidx.annotation.ColorInt;
+import androidx.annotation.NonNull;
 
 import java.util.Objects;
 
 public class SentencedSearchResult implements java.io.Serializable, Parcelable {
+
+    @java.io.Serial
+    private static final long serialVersionUID = 948136521257697556L;
+
+
     private final int pageIndex;
     private final int searchItemIndex;
     private final String text;
     private final int startIndex;
     private final int endIndex;
+
+    private final float rawX;
+    private final float rawY;
 
     transient private SpannableString spannable;
 
@@ -23,13 +32,17 @@ public class SentencedSearchResult implements java.io.Serializable, Parcelable {
                                  int searchItemIndex,
                                  String text,
                                  int startIndex,
-                                 int endIndex
+                                 int endIndex,
+                                 float rawX,
+                                 float rawY
     ) {
         this.pageIndex = pageIndex;
         this.searchItemIndex = searchItemIndex;
         this.text = text;
         this.startIndex = startIndex;
         this.endIndex = endIndex;
+        this.rawX = rawX;
+        this.rawY = rawY;
     }
 
     protected SentencedSearchResult(Parcel in) {
@@ -38,6 +51,8 @@ public class SentencedSearchResult implements java.io.Serializable, Parcelable {
         text = in.readString();
         startIndex = in.readInt();
         endIndex = in.readInt();
+        rawX = in.readFloat();
+        rawY = in.readFloat();
     }
 
     @Override
@@ -47,6 +62,8 @@ public class SentencedSearchResult implements java.io.Serializable, Parcelable {
         dest.writeString(text);
         dest.writeInt(startIndex);
         dest.writeInt(endIndex);
+        dest.writeFloat(rawX);
+        dest.writeFloat(rawY);
     }
 
     @Override
@@ -96,12 +113,20 @@ public class SentencedSearchResult implements java.io.Serializable, Parcelable {
 
     @Deprecated
     public float getxOffset() {
-        return 0f;
+        return rawX;
     }
 
     @Deprecated
     public float getyOffset() {
-        return 0f;
+        return rawY;
+    }
+
+    public float getRawX() {
+        return rawX;
+    }
+
+    public float getRawY() {
+        return rawY;
     }
 
     public int getSearchItemIndex() {
@@ -112,12 +137,26 @@ public class SentencedSearchResult implements java.io.Serializable, Parcelable {
     public boolean equals(Object o) {
         if (!(o instanceof SentencedSearchResult)) return false;
         SentencedSearchResult that = (SentencedSearchResult) o;
-        return pageIndex == that.pageIndex && searchItemIndex == that.searchItemIndex && startIndex == that.startIndex && endIndex == that.endIndex && Objects.equals(text, that.text);
+        return pageIndex == that.pageIndex && searchItemIndex == that.searchItemIndex && startIndex == that.startIndex && endIndex == that.endIndex && Float.compare(rawX, that.rawX) == 0 && Float.compare(rawY, that.rawY) == 0 && Objects.equals(text, that.text);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(pageIndex, searchItemIndex, text, startIndex, endIndex);
+        return Objects.hash(pageIndex, searchItemIndex, text, startIndex, endIndex, rawX, rawY);
+    }
+
+    @NonNull
+    @Override
+    public String toString() {
+        return "SentencedSearchResult{" +
+                "pageIndex=" + pageIndex +
+                ", searchItemIndex=" + searchItemIndex +
+                ", text='" + text + '\'' +
+                ", startIndex=" + startIndex +
+                ", endIndex=" + endIndex +
+                ", rawX=" + rawX +
+                ", rawY=" + rawY +
+                '}';
     }
 
     public SpannableString getSpannedText(@ColorInt int color) {

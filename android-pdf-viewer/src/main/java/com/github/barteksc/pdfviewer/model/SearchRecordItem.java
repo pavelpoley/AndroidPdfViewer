@@ -15,13 +15,27 @@ public class SearchRecordItem {
     public final int pageIndex;
     public final int st;
     public final int ed;
+
+    private final float rawX;
+    private final float rawY;
+
     public final RectF[] rectFS;
 
-    public SearchRecordItem(int pageIndex, int st, int ed, RectF[] rectFS) {
+    public SearchRecordItem(int pageIndex, int st, int ed, RectF[] rectFS, float rawX, float rawY) {
         this.pageIndex = pageIndex;
         this.st = st;
         this.ed = ed;
         this.rectFS = rectFS;
+        this.rawX = rawX;
+        this.rawY = rawY;
+    }
+
+    public float getRawX() {
+        return rawX;
+    }
+
+    public float getRawY() {
+        return rawY;
     }
 
     @NonNull

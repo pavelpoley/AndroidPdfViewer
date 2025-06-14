@@ -85,7 +85,9 @@ public class SearchUtils {
                     itemIndex,
                     snippet,
                     relativeStartIndex,
-                    relativeEndIndex
+                    relativeEndIndex,
+                    item.getRawX(),
+                    item.getRawY()
             ));
         }
 

@@ -105,6 +105,14 @@ inline long getFileSize(int fd) {
     }
 }
 
+inline jlong packFloats(jfloat f1, jfloat f2) {
+    int xBits = *reinterpret_cast<int *>(&f1);
+    int yBits = *reinterpret_cast<int *>(&f2);
+    auto res = (static_cast<jlong>(xBits) << 32) | (yBits & 0xFFFFFFFFL);
+//        LOGD("%f %f %lld", centerX, yBottom, res);
+    return res;
+}
+
 static char *getErrorDescription(const long error) {
     char *description = nullptr;
     switch (error) {
@@ -1040,20 +1048,18 @@ JNI_FUNC(jlong, PdfiumCore, nativeGetTextOffset)(JNI_ARGS, jlong textPtr, jint s
     if (FPDFText_GetRect(textPage, 0, &left, &top, &right, &bottom)) {
         auto centerX = static_cast<float>(left);
         auto yBottom = static_cast<float>(top);
-        int xBits = *reinterpret_cast<int *>(&centerX);
-        int yBits = *reinterpret_cast<int *>(&yBottom);
-        auto res = (static_cast<jlong>(xBits) << 32) | (yBits & 0xFFFFFFFFL);
+        auto res = packFloats(centerX, yBottom);
 //        LOGD("%f %f %lld", centerX, yBottom, res);
         return res;
     }
     return 0;
 }
 
-JNI_FUNC(jboolean, PdfiumCore, nativeGetRect)(JNI_ARGS, jlong pagePtr, jint offsetY, jint offsetX,
-                                              jint width, jint height, jlong textPtr, jobject rect,
-                                              jint idx) {
+JNI_FUNC(jlong, PdfiumCore, nativeGetRect)(JNI_ARGS, jlong pagePtr, jint offsetY, jint offsetX,
+                                           jint width, jint height, jlong textPtr, jobject rect,
+                                           jint idx) {
     if (init_classes) initClasses(env);
-    double left, top, right, bottom;
+    double left = 0.0, top = 0.0, right = 0.0, bottom = 0.0;
 
 
     bool ret = FPDFText_GetRect((FPDF_TEXTPAGE) textPtr, idx, &left, &top, &right, &bottom);
@@ -1081,7 +1087,7 @@ JNI_FUNC(jboolean, PdfiumCore, nativeGetRect)(JNI_ARGS, jlong pagePtr, jint offs
         env->CallVoidMethod(rect, rectF_set, (float) left, (float) top, (float) right,
                             (float) bottom);
     }
-    return ret;
+    return packFloats((jfloat) left, (jfloat) top);
 }
 
 JNI_FUNC(void, PdfiumCore, nativeFindTextPageEnd)(JNI_ARGS, jlong searchPtr) {
@@ -1091,7 +1097,6 @@ JNI_FUNC(jint, PdfiumCore, nativeGetFindLength)(JNI_ARGS, jlong searchPtr) {
     return FPDFText_GetSchCount((FPDF_SCHHANDLE) searchPtr);
 }
 
-#include <cstring>
 
 JNI_FUNC(jlong, PdfiumCore, nativeGetStringChars)(JNI_ARGS, jstring key) {
     if (key == nullptr) {
