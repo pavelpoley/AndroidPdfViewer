@@ -52,7 +52,7 @@ project.afterEvaluate {
             libraryProject(MavenPublication) {
                 groupId 'com.github.pavelpoley'
                 artifactId 'pdfium-android'
-                version '1.0.2'
+                version '1.0.3'
                 artifact bundleReleaseAar
             }
         }

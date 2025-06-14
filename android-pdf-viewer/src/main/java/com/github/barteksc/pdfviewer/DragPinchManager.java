@@ -34,6 +34,7 @@ import com.github.barteksc.pdfviewer.scroll.ScrollHandle;
 import com.github.barteksc.pdfviewer.util.SnapEdge;
 import com.github.barteksc.pdfviewer.util.Util;
 import com.vivlio.android.pdfium.PdfDocument;
+import com.vivlio.android.pdfium.PdfiumCore;
 import com.vivlio.android.pdfium.util.Size;
 import com.vivlio.android.pdfium.util.SizeF;
 
@@ -596,11 +597,22 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
         pdfView.selEnd = Math.max(startSelectedIndex, endSelectionIndex);
         pdfView.startInDrag = false;
         if (pdfView.hasSelection && this.pdfView.callbacks.hasTextSelectionListener()) {
+            long offset = PdfiumCore.nativeGetTextOffset(
+                    pdfView.pdfFile.getTextPage(pdfView.selPageSt),
+                    pdfView.selStart, 1);
+
+            int xBits = (int) (offset >> 32);
+            int yBits = (int) offset;
+            float x = Float.intBitsToFloat(xBits);
+            float y = Float.intBitsToFloat(yBits);
+
             pdfView.callbacks.callOnSelectionEnded(
                     pdfView.getSelection(),
                     pdfView.selPageSt,
                     Util.packIntegers(pdfView.selStart, pdfView.selEnd),
-                    pdfView.selectionPaintView.getRectFMappedToScreen()
+                    pdfView.selectionPaintView.getRectFMappedToScreen(),
+                    x,
+                    y
             );
         }
 

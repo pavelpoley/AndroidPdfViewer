@@ -8,5 +8,5 @@ public interface OnTextSelectionListener {
      *
      * @param text string with the zoom level
      */
-    void onSelection(String text, int pageIndex, long selectionId, RectF frame);
+    void onSelection(String text, int pageIndex, long selectionId, RectF frame, float rawX, float rawY);
 }

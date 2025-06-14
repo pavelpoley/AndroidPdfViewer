@@ -1038,6 +1038,8 @@ JNI_FUNC(jint, PdfiumCore, nativeCountRects)(JNI_ARGS, jlong textPtr, jint st, j
 
 JNI_FUNC(jlong, PdfiumCore, nativeGetTextOffset)(JNI_ARGS, jlong textPtr, jint st, jint ed) {
     auto textPage = reinterpret_cast<FPDF_TEXTPAGE>(textPtr);
+    if (!textPage)return 0L;
+
     int rects = FPDFText_CountRects(textPage, st, ed);
     if (rects == 0) {
 //        LOGE("No rects found");

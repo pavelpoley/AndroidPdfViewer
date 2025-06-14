@@ -234,13 +234,13 @@ public class Callbacks {
         return this.onTextSelectionListener != null || this.onSelectionListener != null;
     }
 
-    public void callOnSelectionEnded(String text, int page, long recordId, RectF rectF) {
+    public void callOnSelectionEnded(String text, int page, long recordId, RectF rectF, float rawX, float rawY) {
         if (onSelectionEndedListener != null) {
             onSelectionEndedListener.onSelection(text, rectF);
         }
 
         if (this.onTextSelectionListener != null) {
-            this.onTextSelectionListener.onSelection(text, page, recordId, rectF);
+            this.onTextSelectionListener.onSelection(text, page, recordId, rectF, rawX, rawY);
         }
     }
 

@@ -291,7 +291,7 @@ public class MainActivity extends AppCompatActivity {
         this.binding.pdfView.jumpAndHighlightArea(page, id);
     }
 
-    private void onTextSelected(String selectedText, int page, long id, RectF selectionRect) {
+    private void onTextSelected(String selectedText, int page, long id, RectF selectionRect, float rawX, float rawY) {
         this.page = page;
         this.id = id;
         Log.d(TAG, "onTextSelected: Callback =>" + page);

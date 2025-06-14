@@ -915,6 +915,7 @@ public class PDFView extends RelativeLayout {
         jumpTo(page, false);
     }
 
+
     public void jumpAndHighlightArea(int page, long selectionId) {
         int startIndex = Util.unpackHigh(selectionId);
         int endIndex = Util.unpackLow(selectionId);
