@@ -93,6 +93,7 @@ import com.github.barteksc.pdfviewer.util.SnapEdge;
 import com.github.barteksc.pdfviewer.util.Util;
 import com.vivlio.android.pdfium.PdfDocument;
 import com.vivlio.android.pdfium.PdfiumCore;
+import com.vivlio.android.pdfium.TOCEntry;
 import com.vivlio.android.pdfium.util.Size;
 import com.vivlio.android.pdfium.util.SizeF;
 
@@ -100,8 +101,10 @@ import java.io.File;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -142,6 +145,9 @@ public class PDFView extends RelativeLayout {
 
     private boolean lockHorizontalScroll = false;
     private boolean lockVerticalScroll = false;
+
+    @Nullable
+    private List<TOCEntry> tocEntries;
 
 
     final Matrix matrix = new Matrix();
@@ -2148,6 +2154,36 @@ public class PDFView extends RelativeLayout {
         }
         return pdfFile.getBookmarks();
     }
+
+    /**
+     * Retrieves and returns the table of contents (TOC) from the PDF file,
+     * sorted using the provided comparator.
+     *
+     * <p>If {@code cached} is true and a previously sorted TOC is available,
+     * it will be returned without fetching or sorting again.</p>
+     *
+     * @param comparator The comparator to use for sorting the TOC entries. Must not be {@code null}.
+     * @param cached     If {@code true}, caches the sorted TOC entries for reuse. If {@code false}, bypasses cache.
+     * @return A sorted list of {@link TOCEntry} objects representing the table of contents.
+     * Returns an empty list if the PDF file is not loaded.
+     * @throws NullPointerException if the provided comparator is {@code null}.
+     */
+    public List<TOCEntry> getTableOfContentsSorted(
+            @NonNull Comparator<TOCEntry> comparator,
+            boolean cached
+    ) {
+        if (tocEntries != null && !cached) return tocEntries;
+        if (pdfFile == null) {
+            return Collections.emptyList();
+        }
+        List<TOCEntry> tocEntries = pdfFile.getTableOfContentNew();
+        tocEntries.sort(Objects.requireNonNull(comparator, "Comparator cannot be null"));
+        if (cached) {
+            this.tocEntries = tocEntries;
+        }
+        return tocEntries;
+    }
+
 
     public List<SentencedSearchResult> getSearchResults(int page) {
         return getSearchResults(page, null);

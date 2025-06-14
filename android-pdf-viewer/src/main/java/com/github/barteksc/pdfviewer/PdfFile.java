@@ -28,6 +28,7 @@ import com.github.barteksc.pdfviewer.util.MapUtil;
 import com.github.barteksc.pdfviewer.util.PageSizeCalculator;
 import com.vivlio.android.pdfium.PdfDocument;
 import com.vivlio.android.pdfium.PdfiumCore;
+import com.vivlio.android.pdfium.TOCEntry;
 import com.vivlio.android.pdfium.util.Size;
 import com.vivlio.android.pdfium.util.SizeF;
 
@@ -407,6 +408,13 @@ class PdfFile {
             return new ArrayList<>();
         }
         return pdfiumCore.getTableOfContents(pdfDocument);
+    }
+
+    public List<TOCEntry> getTableOfContentNew() {
+        if (pdfDocument == null) {
+            return new ArrayList<>();
+        }
+        return pdfiumCore.getTableOfContentsNew(pdfDocument);
     }
 
     public List<PdfDocument.Link> getPageLinks(int pageIndex) {
