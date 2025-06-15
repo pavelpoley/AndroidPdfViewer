@@ -973,6 +973,8 @@ JNI_FUNC(jint, PdfiumCore, nativeCountAndGetRects)(JNI_ARGS, jlong pagePtr, jint
                                                    jint offsetX, jint width, jint height,
                                                    jobject arr, jlong textPtr, jint st, jint ed) {
     if (init_classes) initClasses(env);
+    if (!arr || !rectF_ || !arrList_add || !arrList_get || !arrList_size || !rectF_set) return 0;
+    if (textPtr == 0 || pagePtr == 0 || width <= 0 || height <= 0 || st < 0 || ed <= 0) return 0;
 
     int rectCount = FPDFText_CountRects((FPDF_TEXTPAGE) textPtr, (int) st, (int) ed);
     env->CallVoidMethod(arr, arrList_enssurecap, rectCount);
@@ -1007,10 +1009,112 @@ JNI_FUNC(jint, PdfiumCore, nativeCountAndGetRects)(JNI_ARGS, jlong pagePtr, jint
                 jobject rI = env->CallObjectMethod(arr, arrList_get, i);
                 env->CallVoidMethod(rI, rectF_set, (float) left, (float) top, (float) right,
                                     (float) bottom);
+                env->DeleteLocalRef(rI);
             }
         }
     }
     return rectCount;
+}
+
+
+JNI_FUNC(jint, PdfiumCore, nativeCountAndGetLineRects)(JNI_ARGS,
+                                                       jlong pagePtr, jint offsetY,
+                                                       jint offsetX, jint width, jint height,
+                                                       jobject arr, jlong textPtr, jint st,
+                                                       jint ed, jfloat lineThreshold,
+                                                       jfloat expandProportion) {
+    if (init_classes) initClasses(env);
+
+    // Check for null or invalid input
+    if (!arr || !rectF_ || !arrList_add || !arrList_get || !arrList_size || !rectF_set) return 0;
+    if (textPtr == 0 || pagePtr == 0 || width <= 0 || height <= 0 || st < 0 || ed <= 0) return 0;
+
+    int rectCount = FPDFText_CountRects((FPDF_TEXTPAGE) textPtr, (int) st, (int) ed);
+    if (rectCount <= 0) return 0;
+
+    env->CallVoidMethod(arr, arrList_enssurecap, rectCount);
+
+    std::vector<utils::RectF> rawRects;
+    double left, top, right, bottom;
+
+    for (int i = 0; i < rectCount; i++) {
+        if (FPDFText_GetRect((FPDF_TEXTPAGE) textPtr, i, &left, &top, &right, &bottom)) {
+            utils::RectF rect;
+            rect.left = (float) left;
+            rect.top = (float) top;
+            rect.right = (float) right;
+            rect.bottom = (float) bottom;
+            rawRects.push_back(rect);
+        }
+    }
+
+    // Group rects into lines using a linear scan
+    std::vector<utils::RectF> lineRects;
+    const float _lineThreshold = utils::clamp(lineThreshold, 0.0f, 10.0f);
+    if (!rawRects.empty()) {
+        utils::RectF current = rawRects[0];
+        for (size_t i = 1; i < rawRects.size(); ++i) {
+            const utils::RectF &next = rawRects[i];
+            if (std::abs(current.top - next.top) <= _lineThreshold ||
+                std::abs(current.bottom - next.bottom) <= _lineThreshold) {
+                current.left = std::min(current.left, next.left);
+                current.top = std::max(current.top, next.top);
+                current.right = std::max(current.right, next.right);
+                current.bottom = std::min(current.bottom, next.bottom);
+            } else {
+                lineRects.push_back(current);
+                current = next;
+            }
+        }
+        lineRects.push_back(current);
+    }
+
+    // Expand each line height proportionally
+    const float _expandPercent = utils::clamp(expandProportion, 0.0f, 1.0f);
+    for (auto &line: lineRects) {
+        float _height = line.top - line.bottom;
+        float expand = _height * _expandPercent;
+        line.top += expand;
+        line.bottom -= expand;
+    }
+
+    // Convert to device coordinates and populate arr
+    int deviceX, deviceY, deviceRight, deviceBottom;
+    int lineCount = 0;
+
+    const jint arraySize = env->CallIntMethod(arr, arrList_size);
+
+    for (const auto &r: lineRects) {
+        FPDF_PageToDevice((FPDF_PAGE) pagePtr, 0, 0, (int) width, (int) height, 0,
+                          r.left, r.top, &deviceX, &deviceY);
+        FPDF_PageToDevice((FPDF_PAGE) pagePtr, 0, 0, (int) width, (int) height, 0,
+                          r.right, r.bottom, &deviceRight, &deviceBottom);
+
+        auto devLeft = (float) (deviceX + offsetX);
+        auto devTop = (float) (deviceY + offsetY);
+        auto devRight = (float) (deviceRight + offsetX);
+        auto devBottom = (float) (deviceBottom + offsetY);
+
+        if (lineCount < arraySize) {
+            jobject rI = env->CallObjectMethod(arr, arrList_get, lineCount);
+            if (rI) {
+                env->CallVoidMethod(rI, rectF_set,
+                                    (jfloat) devLeft, (jfloat) devTop,
+                                    (jfloat) devRight, (jfloat) devBottom);
+                env->DeleteLocalRef(rI);
+            }
+        } else {
+            jobject rectObj = env->NewObject(rectF, rectF_,
+                                             (jfloat) devLeft, (jfloat) devTop,
+                                             (jfloat) devRight, (jfloat) devBottom);
+            env->CallBooleanMethod(arr, arrList_add, rectObj);
+            env->DeleteLocalRef(rectObj);
+        }
+
+        lineCount++;
+    }
+
+    return lineCount;
 }
 
 

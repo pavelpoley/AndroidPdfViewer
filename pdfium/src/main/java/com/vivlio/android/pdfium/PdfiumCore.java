@@ -161,6 +161,18 @@ public class PdfiumCore {
 
     private native int nativeCountAndGetRects(long pagePtr, int offsetY, int offsetX, int width, int height, ArrayList<RectF> arr, long tid, int selSt, int selEd);
 
+    private native int nativeCountAndGetLineRects(long pagePtr,
+                                                  int offsetY,
+                                                  int offsetX,
+                                                  int width,
+                                                  int height,
+                                                  ArrayList<RectF> arr,
+                                                  long tid,
+                                                  int selSt,
+                                                  int selEd,
+                                                  float lineThreshold,
+                                                  float expandPercent);
+
     private native long[] nativeGetPageLinks(long pagePtr);
 
     private native Integer nativeGetDestPageIndex(long docPtr, long linkPtr);
@@ -254,9 +266,13 @@ public class PdfiumCore {
         }
     }
 
-    public int getTextRects(long pagePtr, int offsetY, int offsetX, Size size, ArrayList<RectF> arr, long textPtr, int selSt, int selEd) {
+    public int getTextRects(long pagePtr, int offsetY, int offsetX, Size size, ArrayList<RectF> arr, long textPtr, int selSt, int selEd, boolean isSelectionLineMerged, float lineThreshHoldPt, float verticalExpandPercent) {
         synchronized (lock) {
-            return nativeCountAndGetRects(pagePtr, offsetY, offsetX, size.getWidth(), size.getHeight(), arr, textPtr, selSt, selEd);
+            if (!isSelectionLineMerged)
+                return nativeCountAndGetRects(pagePtr, offsetY, offsetX, size.getWidth(), size.getHeight(), arr, textPtr, selSt, selEd);
+
+            return nativeCountAndGetLineRects(pagePtr, offsetY, offsetX, size.getWidth(), size.getHeight(), arr, textPtr, selSt, selEd,
+                    lineThreshHoldPt, verticalExpandPercent);
         }
     }
 

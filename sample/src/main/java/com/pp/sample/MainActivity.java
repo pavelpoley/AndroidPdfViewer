@@ -128,7 +128,7 @@ public class MainActivity extends AppCompatActivity {
         pdfView.setSelectionPaintView(binding.docSelection);
         binding.docSelection
                 .modifySelectionUi()
-                .updateSelectionPaint(paint -> paint.setColor(Color.RED))
+                .updateSelectionPaint(paint -> paint.setColor(Color.argb(100, 0, 0, 255)))
                 .updateEndDragHandleDrawable(drawable -> drawable.setColorFilter(Color.YELLOW, android.graphics.PorterDuff.Mode.SRC_IN))
                 .updateStartDragHandleDrawable(drawable -> {
 
@@ -137,10 +137,7 @@ public class MainActivity extends AppCompatActivity {
 
 
         binding.closeSearchBtn.setOnClickListener(v -> resetAndCloseSearchView());
-        binding.openFile.setOnClickListener(v -> {
-//            launcher.launch("application/pdf");
-            highlightArea();
-        });
+        binding.openFile.setOnClickListener(v -> launcher.launch("application/pdf"));
         binding.closeTableOfContent.setOnClickListener(v ->
                 bottomSheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN));
     }
@@ -249,6 +246,10 @@ public class MainActivity extends AppCompatActivity {
     private boolean mVisible = true;
 
     private void loadPdf(Uri uri) {
+        hidePopupMenu();
+        if (this.binding.pdfView.getHasSelection()) {
+            this.binding.pdfView.clearSelection();
+        }
         resetAndCloseSearchView();
         PDFView.Configurator configurator = (uri == null ?
                 binding.pdfView.fromAsset("sample.pdf")
@@ -257,6 +258,9 @@ public class MainActivity extends AppCompatActivity {
                 .enableSwipe(true)
                 .swipeHorizontal(false)
                 .enableDoubleTap(true)
+                .enableMergedSelectionLines(true)
+                .setLineThreshold(15)
+                .setVerticalExpandPercent(.25f)
                 .defaultPage(0)
                 .onPageScroll((page, positionOffset) -> hidePopupMenu())
                 .spacing(10)
@@ -333,7 +337,6 @@ public class MainActivity extends AppCompatActivity {
                 .deleteSearchResultsCache(this);
         super.onDestroy();
     }
-
 
     private void showContextMenuWithPopupWindow(final String selectedText, final RectF rect) {
         preparePopUpMenu();

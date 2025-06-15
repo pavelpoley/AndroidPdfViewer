@@ -265,7 +265,10 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
                                 rectPagePool,
                                 tid,
                                 selSt,
-                                selEd
+                                selEd,
+                                pdfView.isSelectionLineMerged,
+                                pdfView.lineThreshHoldPt,
+                                pdfView.verticalExpandPercent
                         );
                 if (rectCount >= 0 && rectPagePool.size() > rectCount) {
                     rectPagePool.subList(rectCount, rectPagePool.size()).clear();

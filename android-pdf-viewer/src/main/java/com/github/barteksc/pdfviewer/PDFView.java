@@ -168,6 +168,9 @@ public class PDFView extends RelativeLayout {
 
     public ArrayList<Decoration> decorations = new ArrayList<>();
     private ScrollDir scrollDir;
+    boolean isSelectionLineMerged = false;
+    float lineThreshHoldPt;
+    float verticalExpandPercent;
 
     public void setIsSearching(boolean isSearching) {
         this.isSearching = isSearching;
@@ -2131,6 +2134,16 @@ public class PDFView extends RelativeLayout {
         this.pageSnap = pageSnap;
     }
 
+    private void setMergedSelectionLine(boolean isSelectionLineMerged,
+                                        float lineThreshHoldPt,
+                                        float verticalExpandPercent) {
+        this.isSelectionLineMerged = isSelectionLineMerged;
+        this.lineThreshHoldPt = lineThreshHoldPt;
+        this.verticalExpandPercent = verticalExpandPercent;
+
+    }
+
+
     public boolean doRenderDuringScale() {
         return renderDuringScale;
     }
@@ -2332,6 +2345,10 @@ public class PDFView extends RelativeLayout {
         private float contrast = 1f;
         private float brightness = 1f;
 
+        private boolean isSelectionLineMerged = false;
+        private float lineThreshHoldPt = 0f;
+        private float verticalExpandPercent = 0f;
+
         private View hideView = null;
 
         private Configurator(DocumentSource documentSource) {
@@ -2340,6 +2357,39 @@ public class PDFView extends RelativeLayout {
 
         public Configurator pages(int... pageNumbers) {
             this.pageNumbers = pageNumbers;
+            return this;
+        }
+
+
+        public Configurator enableMergedSelectionLines(boolean enable) {
+            this.isSelectionLineMerged = enable;
+            return this;
+        }
+
+        /**
+         * @param lineThreshHoldPt      range [0f,10f] any other values will be clamped
+         * @param verticalExpandPercent clamp(0f,1f) any other value will be clamped
+         */
+        public Configurator enableMergedSelectionLines(boolean enable, float lineThreshHoldPt, float verticalExpandPercent) {
+            enableMergedSelectionLines(enable);
+            setLineThreshold(lineThreshHoldPt);
+            setVerticalExpandPercent(verticalExpandPercent);
+            return this;
+        }
+
+        /**
+         * @param lineThreshHoldPt range [0f,10f] any other values will be clamped
+         */
+        public Configurator setLineThreshold(float lineThreshHoldPt) {
+            this.lineThreshHoldPt = lineThreshHoldPt;
+            return this;
+        }
+
+        /**
+         * @param verticalExpandPercent clamp(0f,1f) any other value will be clamped
+         */
+        public Configurator setVerticalExpandPercent(float verticalExpandPercent) {
+            this.verticalExpandPercent = verticalExpandPercent;
             return this;
         }
 
@@ -2588,6 +2638,7 @@ public class PDFView extends RelativeLayout {
             PDFView.this.setPageSnap(pageSnap);
             PDFView.this.setPageFling(pageFling);
             PDFView.this.setOnScrollHideView(hideView);
+            PDFView.this.setMergedSelectionLine(isSelectionLineMerged, lineThreshHoldPt, verticalExpandPercent);
 
             if (selectionPaintView == null) {
                 throw new IllegalArgumentException("Did you forget to PDFView#setSelectionPaintView(PDocSelection)?");
