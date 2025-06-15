@@ -2134,9 +2134,9 @@ public class PDFView extends RelativeLayout {
         this.pageSnap = pageSnap;
     }
 
-    private void setMergedSelectionLine(boolean isSelectionLineMerged,
-                                        float lineThreshHoldPt,
-                                        float verticalExpandPercent) {
+    public void setMergedSelectionLine(boolean isSelectionLineMerged,
+                                       float lineThreshHoldPt,
+                                       float verticalExpandPercent) {
         this.isSelectionLineMerged = isSelectionLineMerged;
         this.lineThreshHoldPt = lineThreshHoldPt;
         this.verticalExpandPercent = verticalExpandPercent;

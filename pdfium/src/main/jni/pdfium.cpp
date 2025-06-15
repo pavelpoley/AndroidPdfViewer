@@ -971,7 +971,8 @@ JNI_FUNC(jboolean, PdfiumCore, nativeGetMixedLooseCharPos)(JNI_ARGS, jlong pageP
 
 JNI_FUNC(jint, PdfiumCore, nativeCountAndGetRects)(JNI_ARGS, jlong pagePtr, jint offsetY,
                                                    jint offsetX, jint width, jint height,
-                                                   jobject arr, jlong textPtr, jint st, jint ed) {
+                                                   jobject arr, jlong textPtr, jint st, jint ed,
+                                                   jfloat verticalExpandPercent) {
     if (init_classes) initClasses(env);
     if (!arr || !rectF_ || !arrList_add || !arrList_get || !arrList_size || !rectF_set) return 0;
     if (textPtr == 0 || pagePtr == 0 || width <= 0 || height <= 0 || st < 0 || ed <= 0) return 0;
@@ -984,6 +985,15 @@ JNI_FUNC(jint, PdfiumCore, nativeCountAndGetRects)(JNI_ARGS, jlong pagePtr, jint
     int deviceRight, deviceBottom;
     for (int i = 0; i < rectCount; i++) {//"RectF(373.0, 405.0, 556.0, 434.0)"
         if (FPDFText_GetRect((FPDF_TEXTPAGE) textPtr, i, &left, &top, &right, &bottom)) {
+
+            if (verticalExpandPercent > 0.f) {
+                jfloat p = utils::clamp(verticalExpandPercent, 0.0f, 1.0f);
+                auto _height = abs(top - bottom);
+                top += (p * _height);
+                bottom -= (p * _height);
+            }
+
+
             FPDF_PageToDevice((FPDF_PAGE) pagePtr, 0, 0, (int) width, (int) height, 0, left, top,
                               &deviceX,
                               &deviceY);
@@ -993,6 +1003,9 @@ JNI_FUNC(jint, PdfiumCore, nativeCountAndGetRects)(JNI_ARGS, jlong pagePtr, jint
                               &deviceBottom);
             /*int new_width = right - left;
             int new_height = top - bottom;*/
+
+
+
             left = deviceX + offsetX;
             top = deviceY + offsetY;
 
@@ -1002,9 +1015,10 @@ JNI_FUNC(jint, PdfiumCore, nativeCountAndGetRects)(JNI_ARGS, jlong pagePtr, jint
             right = left + new_width;
             bottom = top + new_height;
             if (i >= arraySize) {
-                env->CallBooleanMethod(arr, arrList_add,
-                                       env->NewObject(rectF, rectF_, (float) left, (float) top,
-                                                      (float) right, (float) bottom));
+                jobject obj = env->NewObject(rectF, rectF_, (float) left, (float) top,
+                                             (float) right, (float) bottom);
+                env->CallBooleanMethod(arr, arrList_add, obj);
+                env->DeleteLocalRef(obj);
             } else {
                 jobject rI = env->CallObjectMethod(arr, arrList_get, i);
                 env->CallVoidMethod(rI, rectF_set, (float) left, (float) top, (float) right,
@@ -1070,12 +1084,14 @@ JNI_FUNC(jint, PdfiumCore, nativeCountAndGetLineRects)(JNI_ARGS,
     }
 
     // Expand each line height proportionally
-    const float _expandPercent = utils::clamp(expandProportion, 0.0f, 1.0f);
-    for (auto &line: lineRects) {
-        float _height = line.top - line.bottom;
-        float expand = _height * _expandPercent;
-        line.top += expand;
-        line.bottom -= expand;
+    if (expandProportion > 0.f) {
+        const float _expandPercent = utils::clamp(expandProportion, 0.0f, 1.0f);
+        for (auto &line: lineRects) {
+            float _height = abs(line.top - line.bottom);
+            float expand = _height * _expandPercent;
+            line.top += expand;
+            line.bottom -= expand;
+        }
     }
 
     // Convert to device coordinates and populate arr

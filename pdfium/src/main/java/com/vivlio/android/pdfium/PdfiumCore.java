@@ -159,7 +159,7 @@ public class PdfiumCore {
 
     private native Size nativeGetPageSizeByIndex(long docPtr, int pageIndex, int dpi);
 
-    private native int nativeCountAndGetRects(long pagePtr, int offsetY, int offsetX, int width, int height, ArrayList<RectF> arr, long tid, int selSt, int selEd);
+    private native int nativeCountAndGetRects(long pagePtr, int offsetY, int offsetX, int width, int height, ArrayList<RectF> arr, long tid, int selSt, int selEd,float verticalExpandPercent);
 
     private native int nativeCountAndGetLineRects(long pagePtr,
                                                   int offsetY,
@@ -269,7 +269,7 @@ public class PdfiumCore {
     public int getTextRects(long pagePtr, int offsetY, int offsetX, Size size, ArrayList<RectF> arr, long textPtr, int selSt, int selEd, boolean isSelectionLineMerged, float lineThreshHoldPt, float verticalExpandPercent) {
         synchronized (lock) {
             if (!isSelectionLineMerged)
-                return nativeCountAndGetRects(pagePtr, offsetY, offsetX, size.getWidth(), size.getHeight(), arr, textPtr, selSt, selEd);
+                return nativeCountAndGetRects(pagePtr, offsetY, offsetX, size.getWidth(), size.getHeight(), arr, textPtr, selSt, selEd,verticalExpandPercent);
 
             return nativeCountAndGetLineRects(pagePtr, offsetY, offsetX, size.getWidth(), size.getHeight(), arr, textPtr, selSt, selEd,
                     lineThreshHoldPt, verticalExpandPercent);
