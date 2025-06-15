@@ -58,6 +58,7 @@ import com.github.barteksc.pdfviewer.link.LinkHandler;
 import com.github.barteksc.pdfviewer.listener.Callbacks;
 import com.github.barteksc.pdfviewer.listener.OnDrawListener;
 import com.github.barteksc.pdfviewer.listener.OnErrorListener;
+import com.github.barteksc.pdfviewer.listener.OnHighlightClickListener;
 import com.github.barteksc.pdfviewer.listener.OnLoadCompleteListener;
 import com.github.barteksc.pdfviewer.listener.OnLongPressListener;
 import com.github.barteksc.pdfviewer.listener.OnPageChangeListener;
@@ -72,6 +73,7 @@ import com.github.barteksc.pdfviewer.listener.OnSelectionListener;
 import com.github.barteksc.pdfviewer.listener.OnTapListener;
 import com.github.barteksc.pdfviewer.listener.OnTextSelectionListener;
 import com.github.barteksc.pdfviewer.model.Decoration;
+import com.github.barteksc.pdfviewer.model.Highlight;
 import com.github.barteksc.pdfviewer.model.PagePart;
 import com.github.barteksc.pdfviewer.model.SearchRecord;
 import com.github.barteksc.pdfviewer.model.SearchRecordItem;
@@ -924,6 +926,13 @@ public class PDFView extends RelativeLayout {
         jumpTo(page, false);
     }
 
+    public void jumpToWithSnap(int page) {
+        jumpTo(page);
+        boolean enabled = pageSnap;
+        setPageSnap(true);
+        performPageSnap();
+        setPageSnap(enabled);
+    }
 
     public void jumpAndHighlightArea(int page, long selectionId) {
         int startIndex = Util.unpackHigh(selectionId);
@@ -931,11 +940,7 @@ public class PDFView extends RelativeLayout {
         if (startIndex < 0 || endIndex <= startIndex) return;
         long textPtr = pdfFile.getTextPage(page);
         if (textPtr == 0L) return;
-        jumpTo(page);
-        boolean enabled = pageSnap;
-        setPageSnap(true);
-        performPageSnap();
-        setPageSnap(enabled);
+        jumpToWithSnap(page);
         dragPinchManager.currentTextPtr = textPtr;
         setSelectionAtPage(page, startIndex, endIndex);
     }
@@ -1181,6 +1186,7 @@ public class PDFView extends RelativeLayout {
     public void recycle() {
         waitingDocumentConfigurator = null;
         closeTask();
+        clearHighlights();
 
         animationManager.stopAll();
         dragPinchManager.disable();
@@ -2223,6 +2229,35 @@ public class PDFView extends RelativeLayout {
         return pdfFile.getPageLinks(page);
     }
 
+
+    public boolean appendHighlight(int pageIndex, long selectionId) {
+        if (selectionPaintView != null) {
+            return selectionPaintView.appendHighlight(pageIndex, selectionId);
+        }
+        return false;
+    }
+
+    public boolean replaceHighlights(List<Highlight> highlights) {
+        if (selectionPaintView != null) {
+            return selectionPaintView.replaceHighlights(highlights);
+        }
+        return false;
+    }
+
+    public boolean removeHighlights(int pageIndex, long selectionId) {
+        if (selectionPaintView != null) {
+            return selectionPaintView.removeHighlight(pageIndex, selectionId);
+        }
+        return false;
+    }
+
+    public void clearHighlights() {
+        if (selectionPaintView != null) {
+            selectionPaintView.clearHighlight();
+        }
+    }
+
+
     /**
      * Use an asset file as the pdf source
      */
@@ -2312,6 +2347,8 @@ public class PDFView extends RelativeLayout {
         private OnPageErrorListener onPageErrorListener;
 
         private LinkHandler linkHandler = new DefaultLinkHandler(PDFView.this);
+
+        private OnHighlightClickListener onHighlightClickListener;
 
         private int defaultPage = 0;
 
@@ -2498,6 +2535,11 @@ public class PDFView extends RelativeLayout {
             return this;
         }
 
+        public Configurator onHighlightClick(OnHighlightClickListener onHighlightClickListener) {
+            this.onHighlightClickListener = onHighlightClickListener;
+            return this;
+        }
+
         public Configurator defaultPage(int defaultPage) {
             this.defaultPage = defaultPage;
             return this;
@@ -2617,6 +2659,7 @@ public class PDFView extends RelativeLayout {
             PDFView.this.callbacks.setOnLongPress(onLongPressListener);
             PDFView.this.callbacks.setOnPageError(onPageErrorListener);
             PDFView.this.callbacks.setLinkHandler(linkHandler);
+            PDFView.this.callbacks.setOnHighlightClickListener(onHighlightClickListener);
             PDFView.this.setSwipeEnabled(enableSwipe);
             if (brightness == 1f && contrast == 1f) {
                 PDFView.this.setNightMode(nightMode);

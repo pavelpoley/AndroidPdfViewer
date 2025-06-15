@@ -37,6 +37,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 
 import com.github.barteksc.pdfviewer.PDFView;
 import com.github.barteksc.pdfviewer.scroll.DefaultScrollHandle;
+import com.github.barteksc.pdfviewer.util.Util;
 import com.google.android.material.bottomsheet.BottomSheetBehavior;
 import com.pp.sample.databinding.ActivityMainBinding;
 import com.pp.sample.databinding.LayoutMenuPopupTextSelectionBinding;
@@ -134,7 +135,6 @@ public class MainActivity extends AppCompatActivity {
 
                 })
                 .apply();
-
 
         binding.closeSearchBtn.setOnClickListener(v -> resetAndCloseSearchView());
         binding.openFile.setOnClickListener(v -> launcher.launch("application/pdf"));
@@ -260,6 +260,13 @@ public class MainActivity extends AppCompatActivity {
                 .enableDoubleTap(true)
                 .enableMergedSelectionLines(true)
                 .setLineThreshold(15)
+                .onLoad(nbPages -> {
+                    this.binding.pdfView
+                            .appendHighlight(1, Util.packIntegers(0, 8));
+                })
+                .onHighlightClick((string, pageIndex, selectionId, rectF) -> {
+                    Log.d(TAG, "loadPdf: " + selectionId);
+                })
                 .setVerticalExpandPercent(.25f)
                 .defaultPage(0)
                 .onPageScroll((page, positionOffset) -> hidePopupMenu())
@@ -287,19 +294,11 @@ public class MainActivity extends AppCompatActivity {
         configurator.load();
     }
 
-    int page;
-    long id;
-
     private void highlightArea() {
         this.binding.pdfView.clearSelection();
-        this.binding.pdfView.jumpAndHighlightArea(page, id);
     }
 
     private void onTextSelected(String selectedText, int page, long id, RectF selectionRect, float rawX, float rawY) {
-        this.page = page;
-        this.id = id;
-        Log.d(TAG, "onTextSelected: Callback =>" + page);
-        Log.d(TAG, "onTextSelected: PDF Page =>" + binding.pdfView.getCurrentPage());
         hidePopupMenu();
         if (debounceRunnable != null) {
             debounceHandler.removeCallbacks(debounceRunnable);

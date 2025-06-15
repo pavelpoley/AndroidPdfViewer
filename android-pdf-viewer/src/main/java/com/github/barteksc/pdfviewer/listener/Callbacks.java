@@ -97,6 +97,8 @@ public class Callbacks {
 
     private OnSearchEndListener onSearchEndListener;
 
+    private OnHighlightClickListener onHighlightClickListener;
+
 
     public void setOnLoadComplete(OnLoadCompleteListener onLoadCompleteListener) {
         this.onLoadCompleteListener = onLoadCompleteListener;
@@ -196,6 +198,10 @@ public class Callbacks {
         this.linkHandler = linkHandler;
     }
 
+    public void setOnHighlightClickListener(OnHighlightClickListener onHighlightClickListener) {
+        this.onHighlightClickListener = onHighlightClickListener;
+    }
+
     public void callLinkHandler(LinkTapEvent event) {
         if (linkHandler != null) {
             linkHandler.handleLinkEvent(event);
@@ -274,4 +280,9 @@ public class Callbacks {
         }
     }
 
+    public void callOnHighlightClick(String string, int page, long selectionId, RectF rectF) {
+        if (this.onHighlightClickListener != null) {
+            this.onHighlightClickListener.onClick(string, page, selectionId, rectF);
+        }
+    }
 }

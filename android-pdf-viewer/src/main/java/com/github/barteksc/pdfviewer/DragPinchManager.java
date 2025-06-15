@@ -19,6 +19,7 @@ import static com.github.barteksc.pdfviewer.util.Constants.Pinch.MAXIMUM_ZOOM;
 import static com.github.barteksc.pdfviewer.util.Constants.Pinch.MINIMUM_ZOOM;
 
 import android.annotation.SuppressLint;
+import android.graphics.Matrix;
 import android.graphics.PointF;
 import android.graphics.RectF;
 import android.util.Log;
@@ -81,6 +82,10 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
     private boolean enabled = false;
     private boolean isScaleAnimationInProgress = false;
 
+    private final Matrix matrix = new Matrix();
+    private final RectF clickRectF = new RectF();
+
+
     boolean isScaling() {
         return scaling || isScaleAnimationInProgress;
     }
@@ -118,12 +123,19 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
         if (pdfView.hasSelection) {
             pdfView.clearSelection();
         } else {
-            onTapHandled = pdfView.callbacks.callOnTap(e);
+            boolean highlightTapped = checkHighlightClicked(e.getX(), e.getY());
+            if (!highlightTapped) {
+                onTapHandled = pdfView.callbacks.callOnTap(e);
+            } else {
+                onTapHandled = true;
+            }
+
         }
         if (pdfView.pdfFile == null) {
             return true;
         }
         boolean linkTapped = checkLinkTapped(e.getX(), e.getY());
+
         if (!onTapHandled && !linkTapped) {
             ScrollHandle ps = pdfView.getScrollHandle();
             boolean fitsView = pdfView.documentFitsView();
@@ -275,6 +287,54 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
                 }
             }
         }
+    }
+
+    private boolean checkHighlightClicked(float x, float y) {
+        PdfFile pdfFile = pdfView.pdfFile;
+        if (pdfFile == null) {
+            return false;
+        }
+
+        float mappedX = -pdfView.getCurrentXOffset() + x;
+        float mappedY = -pdfView.getCurrentYOffset() + y;
+        int page = pdfFile.getPageAtOffset(pdfView.isSwipeVertical() ? mappedY : mappedX, pdfView.getZoom());
+
+        int pageX = pdfView.getPageX(page);
+        int pageY = pdfView.getPageY(page);
+
+        var highlights = pdfView.selectionPaintView.getHighlights().get(page);
+        if (highlights == null) return false;
+        matrix.reset();
+        clickRectF.setEmpty();
+
+        matrix.postScale(pdfView.getZoom(), pdfView.getZoom());
+        matrix.postTranslate(pageX, pageY);
+
+
+        for (var entry : highlights.entrySet()) {
+            for (RectF rect : entry.getValue()) {
+                matrix.mapRect(clickRectF, rect);
+                if (clickRectF.contains(mappedX, mappedY)) {
+                    String str = "";
+                    long textPage = pdfFile.getTextPage(page);
+                    if (textPage != 0L) {
+                        String allText = pdfView.pdfiumCore.nativeGetText(textPage);
+                        var statIndex = Util.unpackHigh(entry.getKey());
+                        var endIndex = Util.unpackLow(entry.getKey());
+                        if (statIndex >= 0 && endIndex > statIndex && endIndex <= allText.length()) {
+                            str = allText.substring(statIndex, endIndex);
+                        }
+                    }
+                    clickRectF.setEmpty();
+                    pdfView.selectionPaintView.mapRectFMappedToScreen(entry.getValue(), pdfView.selectionPaintView.fullSelectedRectF);
+                    pdfView.callbacks.callOnHighlightClick(str, page, entry.getKey(), pdfView.selectionPaintView.fullSelectedRectF);
+                    return true;
+                }
+            }
+
+        }
+
+        return false;
     }
 
     private boolean checkLinkTapped(float x, float y) {

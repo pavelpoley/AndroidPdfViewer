@@ -14,6 +14,7 @@ import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.util.AttributeSet;
 import android.util.Log;
+import android.util.SparseBooleanArray;
 import android.view.View;
 import android.widget.Magnifier;
 
@@ -24,12 +25,21 @@ import androidx.annotation.Nullable;
 import androidx.core.content.res.ResourcesCompat;
 import androidx.core.util.Consumer;
 
+import com.github.barteksc.pdfviewer.exception.PageRenderingException;
+import com.github.barteksc.pdfviewer.model.Highlight;
 import com.github.barteksc.pdfviewer.model.SearchRecord;
 import com.github.barteksc.pdfviewer.model.SearchRecordItem;
 import com.github.barteksc.pdfviewer.util.Util;
+import com.vivlio.android.pdfium.util.SizeF;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 
 /**
  * A View to paint PDF selections, [magnifier] and search highlights
@@ -52,6 +62,8 @@ public class PDocSelection extends View {
     private Paint searchedFocusedSelectionPaint;
     private Paint searchedSelectionPaint;
 
+    private Paint higlightsPaint;
+
     RectF startHandleRectF;
     RectF endHandleRectF;
 
@@ -65,6 +77,9 @@ public class PDocSelection extends View {
 
     int rectPoolSize = 0;
     ArrayList<ArrayList<RectF>> rectPool = new ArrayList<>();
+    private final HashMap<Integer, HashMap<Long, ArrayList<RectF>>> highlights = new HashMap<>();
+    private final SparseBooleanArray loadedHighlights = new SparseBooleanArray();
+
 
     public PDocSelection(Context context) {
         super(context);
@@ -102,6 +117,10 @@ public class PDocSelection extends View {
         searchedSelectionPaint = new Paint();
         searchedSelectionPaint.setColor(Color.YELLOW);
         searchedSelectionPaint.setXfermode(xfermode);
+
+        higlightsPaint = new Paint();
+        higlightsPaint.setColor(0X330000FF);
+        higlightsPaint.setXfermode(xfermode);
 
 
         searchedFocusedSelectionPaint = new Paint();
@@ -196,8 +215,27 @@ public class PDocSelection extends View {
         return new RectF(left, top, right, bottom);
     }
 
-    private final RectF fullSelectedRectF = new RectF();
+    final RectF fullSelectedRectF = new RectF();
     private final RectF AR = new RectF();
+
+    void mapRectFMappedToScreen(ArrayList<RectF> rectFS, RectF dest) {
+        float left = -1f, top = -1f, right = -1f, bottom = -1f;
+        for (int j = 0; j < rectFS.size(); j++) {
+            mapRect(rectFS.get(j), AR);
+            if (j == 0) {
+                left = AR.left;
+                top = AR.top;
+            }
+            if (j == rectFS.size() - 1) {
+                bottom = AR.bottom;
+            }
+            if (AR.left > -1f) {
+                left = Math.min(AR.left, left);
+            }
+            right = Math.max(right, AR.right);
+        }
+        dest.set(left, top, right, bottom);
+    }
 
     public RectF getRectFMappedToScreen() {
         float left = -1f, top = -1f, right = -1f, bottom = -1f;
@@ -205,21 +243,7 @@ public class PDocSelection extends View {
         if (rectPoolSize > 1) return fullSelectedRectF;
         for (int i = 0; i < rectPool.size(); i++) {
             ArrayList<RectF> rectFS = rectPool.get(i);
-            for (int j = 0; j < rectFS.size(); j++) {
-                mapRect(rectFS.get(j), AR);
-                if (j == 0) {
-                    left = AR.left;
-                    top = AR.top;
-                }
-                if (j == rectFS.size() - 1) {
-                    bottom = AR.bottom;
-                }
-                if (AR.left > -1f) {
-                    left = Math.min(AR.left, left);
-                }
-                right = Math.max(right, AR.right);
-            }
-            fullSelectedRectF.set(left, top, right, bottom);
+            mapRectFMappedToScreen(rectFS, fullSelectedRectF);
         }
         return fullSelectedRectF;
     }
@@ -292,8 +316,8 @@ public class PDocSelection extends View {
         }
         super.onDraw(canvas);
         try {
+            int currentPage = pdfView.currentPage;
             if (pdfView.isSearching && pdfView.pdfFile != null) {
-                int currentPage = pdfView.currentPage;
                 var record0 = pdfView.getAllMatchOnPage(getSearchRecord(currentPage - 1));
                 var record = pdfView.getAllMatchOnPage(getSearchRecord(currentPage));
                 var record1 = pdfView.getAllMatchOnPage(getSearchRecord(currentPage + 1));
@@ -349,6 +373,13 @@ public class PDocSelection extends View {
                     }
                 }
             }
+
+            if (pdfView.pdfFile != null) {
+                loadHighlightsForPage(canvas, currentPage - 1);
+                loadHighlightsForPage(canvas, currentPage);
+                loadHighlightsForPage(canvas, currentPage + 1);
+            }
+
         } catch (Exception e) {
             Log.e(TAG, "onDraw: ", e);
         }
@@ -378,6 +409,153 @@ public class PDocSelection extends View {
     }
 
 
+    private void loadHighlightsForPage(Canvas canvas, int pageIndex) {
+        HashMap<Long, ArrayList<RectF>> r = highlights.get(pageIndex);
+        if (r == null) return;
+        for (Map.Entry<Long, ArrayList<RectF>> entry : r.entrySet()) {
+            if (!entry.getValue().isEmpty()) continue;
+            long pagePtr = Objects.requireNonNullElseGet(
+                    this.pdfView.pdfFile.pdfDocument.mNativePagesPtr.get(pageIndex),
+                    () -> {
+                        try {
+                            return pdfView.pdfFile.openPage(pageIndex);
+                        } catch (PageRenderingException e) {
+                            return 0L;
+                        }
+                    });
+            long textPtr = Objects.requireNonNullElseGet(
+                    this.pdfView.pdfFile.pdfDocument.mNativeTextPtr.get(pageIndex),
+                    () -> pdfView.pdfFile.getTextPage(pageIndex)
+            );
+            if (pagePtr == 0L || textPtr == 0L) {
+                return;
+            }
+            int startIndex = Util.unpackHigh(entry.getKey());
+            int endIndex = Util.unpackLow(entry.getKey());
+            SizeF pageSize = pdfView.pdfFile.getPageSize(pageIndex);
+            if (pageSize.isEmpty() || startIndex < 0 || (endIndex - startIndex) <= 0) {
+                return;
+            }
+            this.pdfView.pdfiumCore.getTextRects(
+                    pagePtr,
+                    0,
+                    0,
+                    pageSize.toSize(),
+                    entry.getValue(),
+                    textPtr,
+                    startIndex,
+                    endIndex - startIndex,
+                    this.pdfView.isSelectionLineMerged,
+                    this.pdfView.lineThreshHoldPt,
+                    this.pdfView.verticalExpandPercent
+            );
+
+        }
+        drawHighlights(canvas, r, pageIndex);
+    }
+
+    private void drawHighlights(Canvas canvas, HashMap<Long, ArrayList<RectF>> rects, int pageIndex) {
+        var matrix = pdfView.matrix;
+        for (var key : rects.entrySet()) {
+            for (RectF rI : key.getValue()) {
+                pdfView.sourceToViewRectFFSearch(rI, VR, pageIndex);
+                matrix.reset();
+                int bmWidth = (int) rI.width() + 2;
+                int bmHeight = (int) rI.height() + 2;
+                pdfView.setMatrixArray(pdfView.srcArray, 0, 0, bmWidth, 0, bmWidth, bmHeight, 0, bmHeight);
+                pdfView.setMatrixArray(pdfView.dstArray, VR.left, VR.top, VR.right, VR.top, VR.right, VR.bottom, VR.left, VR.bottom);
+                matrix.setPolyToPoly(pdfView.srcArray, 0, pdfView.dstArray, 0, 4);
+                canvas.save();
+                canvas.concat(matrix);
+                VR.set(0, 0, bmWidth, bmHeight);
+                canvas.drawRect(VR, higlightsPaint);
+                canvas.restore();
+            }
+        }
+    }
+
+    boolean appendHighlight(int pageIndex, long selectionId) {
+        HashMap<Long, ArrayList<RectF>> r = highlights.get(pageIndex);
+        if (r == null) r = new HashMap<>();
+        if (r.containsKey(selectionId)) return false;
+        ArrayList<RectF> rects = r.get(selectionId);
+        if (rects == null) rects = new ArrayList<>();
+        r.put(selectionId, rects);
+        highlights.put(pageIndex, r);
+        return true;
+    }
+
+
+    boolean replaceHighlights(List<Highlight> highlights) {
+        HashMap<Integer, HashMap<Long, ArrayList<RectF>>> selectionPaintViewHighlights =
+                pdfView.selectionPaintView.getHighlights();
+
+        // Step 1: Create a Set of valid keys and ensure all highlights exist in the map
+        Set<String> validKeys = new HashSet<>();
+        for (Highlight h : highlights) {
+            validKeys.add(h.getPageIndex() + "-" + h.getSelectionId());
+
+            // Ensure the page map exists
+            HashMap<Long, ArrayList<RectF>> pageMap =
+                    selectionPaintViewHighlights.computeIfAbsent(h.getPageIndex(), k -> new HashMap<>());
+
+            // Ensure the selectionId map exists with an empty list if missing
+            pageMap.computeIfAbsent(h.getSelectionId(), k -> new ArrayList<>());
+        }
+
+        // Step 2: Remove entries that are NOT present in the highlight list
+        Iterator<Map.Entry<Integer, HashMap<Long, ArrayList<RectF>>>> pageIterator =
+                selectionPaintViewHighlights.entrySet().iterator();
+
+        while (pageIterator.hasNext()) {
+            Map.Entry<Integer, HashMap<Long, ArrayList<RectF>>> pageEntry = pageIterator.next();
+            Integer pageIndex = pageEntry.getKey();
+            HashMap<Long, ArrayList<RectF>> innerMap = pageEntry.getValue();
+
+            Iterator<Map.Entry<Long, ArrayList<RectF>>> selectionIterator = innerMap.entrySet().iterator();
+            while (selectionIterator.hasNext()) {
+                Map.Entry<Long, ArrayList<RectF>> selectionEntry = selectionIterator.next();
+                Long selectionId = selectionEntry.getKey();
+
+                String key = pageIndex + "-" + selectionId;
+                if (!validKeys.contains(key)) {
+                    selectionIterator.remove(); // Remove if not in the valid list
+                }
+            }
+
+            // Remove page if it's empty after cleanup
+            if (innerMap.isEmpty()) {
+                pageIterator.remove();
+            }
+        }
+        if (isAttachedToWindow()) postInvalidate();
+
+        return true;
+    }
+
+
+    boolean removeHighlight(int pageIndex, long selectionId) {
+        var hs = highlights.get(pageIndex);
+        if (hs == null) return false;
+        if (hs.containsKey(selectionId)) {
+            hs.remove(selectionId);
+            if (isAttachedToWindow()) {
+                postInvalidate();
+            }
+            return true;
+        }
+        return false;
+    }
+
+
+    void clearHighlight() {
+        highlights.clear();
+        if (isAttachedToWindow()) {
+            postInvalidate();
+        }
+    }
+
+
     /**
      * To draw search result after and before current page
      **/
@@ -388,6 +566,10 @@ public class PDocSelection extends View {
             return pdfView.searchRecords.get(page);
         }
         return null;
+    }
+
+    HashMap<Integer, HashMap<Long, ArrayList<RectF>>> getHighlights() {
+        return highlights;
     }
 
     /**
@@ -406,6 +588,7 @@ public class PDocSelection extends View {
         private Consumer<Paint> selectionPaintConsumer;
         private Consumer<Paint> searchedSelectionConsumer;
         private Consumer<Paint> focusedSearchedConsumer;
+        private Consumer<Paint> hilightsPaintConsumer;
 
         private Drawable tempStartSelectionHandle;
         private Consumer<Drawable> startDragConsumer;
@@ -557,6 +740,12 @@ public class PDocSelection extends View {
             return this;
         }
 
+        public PDocSelectionConfig updateHighlightsPaint(Consumer<Paint> paintConsumer) {
+            this.hilightsPaintConsumer = paintConsumer;
+            return this;
+        }
+
+
         /**
          * Updates the drawable configuration for the start drag handle.
          * This method accepts a consumer function that modifies the drawable used for the start drag handle.
@@ -647,6 +836,9 @@ public class PDocSelection extends View {
             }
             if (endDargConsumer != null) {
                 endDargConsumer.accept(tempEndSelectionHandle);
+            }
+            if (hilightsPaintConsumer != null) {
+                hilightsPaintConsumer.accept(selection.higlightsPaint);
             }
         }
     }
