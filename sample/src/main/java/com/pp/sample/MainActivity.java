@@ -260,6 +260,7 @@ public class MainActivity extends AppCompatActivity {
                 .enableDoubleTap(true)
                 .enableMergedSelectionLines(true)
                 .setLineThreshold(15)
+                .setSepia(.5f)
                 .onLoad(nbPages -> {
                     this.binding.pdfView
                             .appendHighlight(1, Util.packIntegers(0, 8));

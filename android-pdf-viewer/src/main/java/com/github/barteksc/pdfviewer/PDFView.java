@@ -48,6 +48,7 @@ import android.view.View;
 import android.view.WindowManager;
 import android.widget.RelativeLayout;
 
+import androidx.annotation.FloatRange;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
@@ -108,6 +109,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Consumer;
 
 /**
  * It supports animations, zoom, cache, and swipe.
@@ -173,6 +175,7 @@ public class PDFView extends RelativeLayout {
     boolean isSelectionLineMerged = false;
     float lineThreshHoldPt;
     float verticalExpandPercent;
+    float searchVerticalExpandPercent;
 
     public void setIsSearching(boolean isSearching) {
         this.isSearching = isSearching;
@@ -353,6 +356,9 @@ public class PDFView extends RelativeLayout {
     private boolean doubleTapEnabled = true;
 
     private boolean nightMode = false;
+    private float sepiaAmount = 0f;
+    private float brightnessScale = 1f;
+    private float contrastScale = 1f;
 
     private boolean pageSnap = true;
 
@@ -847,7 +853,8 @@ public class PDFView extends RelativeLayout {
                     RectF rI = new RectF();
                     long offset = pdfiumCore.nativeGetRect(pid, 0, 0,
                             (int) size.getWidth(), (int) size.getHeight(),
-                            tid, rI, i);
+                            tid, rI, i,
+                            searchVerticalExpandPercent);
                     rectFS[i] = rI;
                     if (i == 0) {
                         firstOffset = offset;
@@ -1103,47 +1110,78 @@ public class PDFView extends RelativeLayout {
         }
     }
 
-    public void setNightMode(boolean nightMode) {
-        this.nightMode = nightMode;
-        if (nightMode) {
-            ColorMatrix colorMatrixInverted = new ColorMatrix(new float[]{
-                    -1, 0, 0, 0, 255,
-                    0, -1, 0, 0, 255,
-                    0, 0, -1, 0, 255,
-                    0, 0, 0, 1, 0
-            });
+    public void setSepiaMode(@FloatRange(from = 0, to = 1) float sepiaAmount) {
+        this.sepiaAmount = sepiaAmount;
+        updateColorFilter();
+    }
 
-            ColorMatrixColorFilter filter = new ColorMatrixColorFilter(colorMatrixInverted);
-            paint.setColorFilter(filter);
-        } else {
-            paint.setColorFilter(null);
-        }
+
+    public void setNightMode(boolean nightMode) {
+        setNightMode(nightMode, 1f, 1f);
+        updateColorFilter();
     }
 
     public void setNightMode(boolean nightMode, float brightnessScale, float contrastScale) {
-        if (brightnessScale == 1f && contrastScale == 1f) {
-            setNightMode(nightMode);
-            return;
-        }
         this.nightMode = nightMode;
+        this.brightnessScale = brightnessScale;
+        this.contrastScale = contrastScale;
+        updateColorFilter();
+    }
+
+    public void modifyBitmapPaint(Consumer<Paint> consumer) {
+        if (consumer != null)
+            consumer.accept(paint);
+    }
+
+    private void updateColorFilter() {
+        ColorMatrix finalMatrix = new ColorMatrix();
+
+        // Apply interpolated sepia
+        if (sepiaAmount > 0f) {
+            float[] identity = new float[]{
+                    1, 0, 0, 0, 0,
+                    0, 1, 0, 0, 0,
+                    0, 0, 1, 0, 0,
+                    0, 0, 0, 1, 0
+            };
+
+            float[] sepia = new float[]{
+                    0.393f, 0.769f, 0.189f, 0, 0,
+                    0.349f, 0.686f, 0.168f, 0, 0,
+                    0.272f, 0.534f, 0.131f, 0, 0,
+                    0, 0, 0, 1, 0
+            };
+
+            float[] blended = new float[20];
+            for (int i = 0; i < 20; i++) {
+                blended[i] = identity[i] * (1f - sepiaAmount) + sepia[i] * sepiaAmount;
+            }
+
+            ColorMatrix sepiaMatrix = new ColorMatrix(blended);
+            finalMatrix.postConcat(sepiaMatrix);
+        }
+
+        // Apply night mode with brightness/contrast
         if (nightMode) {
-            // Invert colors
-            float[] src = {
+            float[] invert = {
                     -1, 0, 0, 0, 255,
                     0, -1, 0, 0, 255,
                     0, 0, -1, 0, 255,
                     0, 0, 0, 1, 0
             };
-            ColorMatrix colorMatrixInverted = getColorMatrix(brightnessScale, contrastScale, src);
 
-            // Apply the final filter
-            ColorMatrixColorFilter filter = new ColorMatrixColorFilter(colorMatrixInverted);
-            paint.setColorFilter(filter);
-        } else {
-            // Reset to default
+            ColorMatrix nightMatrix = getColorMatrix(brightnessScale, contrastScale, invert);
+            finalMatrix.postConcat(nightMatrix);
+        }
+
+        // Final application
+        if (!nightMode && sepiaAmount == 0f) {
             paint.setColorFilter(null);
+        } else {
+            paint.setColorFilter(new ColorMatrixColorFilter(finalMatrix));
         }
     }
+
 
     @NonNull
     private static ColorMatrix getColorMatrix(float brightnessScale, float contrastScale, float[] src) {
@@ -2142,11 +2180,16 @@ public class PDFView extends RelativeLayout {
 
     public void setMergedSelectionLine(boolean isSelectionLineMerged,
                                        float lineThreshHoldPt,
-                                       float verticalExpandPercent) {
+                                       @FloatRange(from = 0.0, to = 3.0) float verticalExpandPercent) {
         this.isSelectionLineMerged = isSelectionLineMerged;
         this.lineThreshHoldPt = lineThreshHoldPt;
         this.verticalExpandPercent = verticalExpandPercent;
 
+    }
+
+    public void setSearchVerticalExpandPercent(@FloatRange(from = 0.0, to = 3.0) float value) {
+        if (value >= 0f)
+            this.verticalExpandPercent = value;
     }
 
 
@@ -2381,10 +2424,12 @@ public class PDFView extends RelativeLayout {
         private boolean nightMode = false;
         private float contrast = 1f;
         private float brightness = 1f;
+        private float sepiaAmount = 0f;
 
         private boolean isSelectionLineMerged = false;
         private float lineThreshHoldPt = 0f;
         private float verticalExpandPercent = 0f;
+        private float searchItemVerticalExpandPercent = 0f;
 
         private View hideView = null;
 
@@ -2427,6 +2472,11 @@ public class PDFView extends RelativeLayout {
          */
         public Configurator setVerticalExpandPercent(float verticalExpandPercent) {
             this.verticalExpandPercent = verticalExpandPercent;
+            return this;
+        }
+
+        public Configurator setSearchItemsVerticalExpandPercent(float value) {
+            this.searchItemVerticalExpandPercent = value;
             return this;
         }
 
@@ -2611,14 +2661,18 @@ public class PDFView extends RelativeLayout {
         }
 
         public Configurator nightMode(boolean nightMode) {
-            this.nightMode = nightMode;
-            return this;
+            return nightMode(nightMode, 1f, 1f);
         }
 
         public Configurator nightMode(boolean nightMode, float brightness, float contrast) {
             this.nightMode = nightMode;
             this.brightness = brightness;
             this.contrast = contrast;
+            return this;
+        }
+
+        public Configurator setSepia(@FloatRange(from = 0.0, to = 1.0) float value) {
+            this.sepiaAmount = value;
             return this;
         }
 
@@ -2661,11 +2715,8 @@ public class PDFView extends RelativeLayout {
             PDFView.this.callbacks.setLinkHandler(linkHandler);
             PDFView.this.callbacks.setOnHighlightClickListener(onHighlightClickListener);
             PDFView.this.setSwipeEnabled(enableSwipe);
-            if (brightness == 1f && contrast == 1f) {
-                PDFView.this.setNightMode(nightMode);
-            } else {
-                PDFView.this.setNightMode(nightMode, brightness, contrast);
-            }
+            PDFView.this.setNightMode(nightMode, brightness, contrast);
+            PDFView.this.setSepiaMode(this.sepiaAmount);
             PDFView.this.enableDoubleTap(enableDoubleTap);
             PDFView.this.setDefaultPage(defaultPage);
             PDFView.this.setSwipeVertical(!swipeHorizontal);
@@ -2682,6 +2733,7 @@ public class PDFView extends RelativeLayout {
             PDFView.this.setPageFling(pageFling);
             PDFView.this.setOnScrollHideView(hideView);
             PDFView.this.setMergedSelectionLine(isSelectionLineMerged, lineThreshHoldPt, verticalExpandPercent);
+            PDFView.this.setSearchVerticalExpandPercent(this.searchItemVerticalExpandPercent);
 
             if (selectionPaintView == null) {
                 throw new IllegalArgumentException("Did you forget to PDFView#setSelectionPaintView(PDocSelection)?");

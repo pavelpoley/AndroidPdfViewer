@@ -987,7 +987,7 @@ JNI_FUNC(jint, PdfiumCore, nativeCountAndGetRects)(JNI_ARGS, jlong pagePtr, jint
         if (FPDFText_GetRect((FPDF_TEXTPAGE) textPtr, i, &left, &top, &right, &bottom)) {
 
             if (verticalExpandPercent > 0.f) {
-                jfloat p = utils::clamp(verticalExpandPercent, 0.0f, 1.0f);
+                jfloat p = utils::clamp(verticalExpandPercent, 0.0f, 3.0f);
                 auto _height = abs(top - bottom);
                 top += (p * _height);
                 bottom -= (p * _height);
@@ -1064,7 +1064,7 @@ JNI_FUNC(jint, PdfiumCore, nativeCountAndGetLineRects)(JNI_ARGS,
 
     // Group rects into lines using a linear scan
     std::vector<utils::RectF> lineRects;
-    const float _lineThreshold = utils::clamp(lineThreshold, 0.0f, 10.0f);
+    const float _lineThreshold = utils::clamp(lineThreshold, 0.0f, 20.0f);
     if (!rawRects.empty()) {
         utils::RectF current = rawRects[0];
         for (size_t i = 1; i < rawRects.size(); ++i) {
@@ -1085,7 +1085,7 @@ JNI_FUNC(jint, PdfiumCore, nativeCountAndGetLineRects)(JNI_ARGS,
 
     // Expand each line height proportionally
     if (expandProportion > 0.f) {
-        const float _expandPercent = utils::clamp(expandProportion, 0.0f, 1.0f);
+        const float _expandPercent = utils::clamp(expandProportion, 0.0f, 3.0f);
         for (auto &line: lineRects) {
             float _height = abs(line.top - line.bottom);
             float expand = _height * _expandPercent;
@@ -1179,13 +1179,22 @@ JNI_FUNC(jlong, PdfiumCore, nativeGetTextOffset)(JNI_ARGS, jlong textPtr, jint s
 
 JNI_FUNC(jlong, PdfiumCore, nativeGetRect)(JNI_ARGS, jlong pagePtr, jint offsetY, jint offsetX,
                                            jint width, jint height, jlong textPtr, jobject rect,
-                                           jint idx) {
+                                           jint idx,
+                                           jfloat expandPercent) {
     if (init_classes) initClasses(env);
     double left = 0.0, top = 0.0, right = 0.0, bottom = 0.0;
 
 
     bool ret = FPDFText_GetRect((FPDF_TEXTPAGE) textPtr, idx, &left, &top, &right, &bottom);
     if (ret) {
+        if (expandPercent > 0.f) {
+            const float _expandPercent = utils::clamp((expandPercent), 0.0f, 3.0f);
+            double _height = abs(top - bottom);
+            double expand = _height * _expandPercent;
+            top += expand;
+            bottom -= expand;
+        }
+
         int deviceX, deviceY;
         int deviceRight, deviceBottom;
         FPDF_PageToDevice((FPDF_PAGE) pagePtr, 0, 0, width, height, 0, left, top, &deviceX,
@@ -1193,6 +1202,9 @@ JNI_FUNC(jlong, PdfiumCore, nativeGetRect)(JNI_ARGS, jlong pagePtr, jint offsetY
         FPDF_PageToDevice((FPDF_PAGE) pagePtr, 0, 0, (int) width, (int) height, 0, right, bottom,
                           &deviceRight,
                           &deviceBottom);
+
+
+
 
 
         // int width = right-left;
