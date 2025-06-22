@@ -1115,6 +1115,13 @@ public class PDFView extends RelativeLayout {
         updateColorFilter();
     }
 
+    public float getSepiaAmount() {
+        return sepiaAmount;
+    }
+
+    public boolean isSepiaMode() {
+        return sepiaAmount > 0f;
+    }
 
     public void setNightMode(boolean nightMode) {
         setNightMode(nightMode, 1f, 1f);
