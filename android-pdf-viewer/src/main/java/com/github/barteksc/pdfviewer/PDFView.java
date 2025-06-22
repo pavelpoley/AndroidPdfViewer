@@ -2196,7 +2196,7 @@ public class PDFView extends RelativeLayout {
 
     public void setSearchVerticalExpandPercent(@FloatRange(from = 0.0, to = 3.0) float value) {
         if (value >= 0f)
-            this.verticalExpandPercent = value;
+            this.searchVerticalExpandPercent = value;
     }
 
 
