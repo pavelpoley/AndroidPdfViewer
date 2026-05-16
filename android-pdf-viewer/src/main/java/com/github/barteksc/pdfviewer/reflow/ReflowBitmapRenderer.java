@@ -5,6 +5,10 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Rect;
+import android.os.CancellationSignal;
+import android.os.OperationCanceledException;
+
+import androidx.annotation.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -15,35 +19,83 @@ final class ReflowBitmapRenderer {
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
 
     ReflowBitmapProcessor.Result renderTiles(Bitmap source, ReflowLayout layout, int targetWidth, int tileHeight) {
+        return renderTiles(source, layout, targetWidth, tileHeight, null);
+    }
+
+    ReflowBitmapProcessor.Result renderTiles(
+            Bitmap source,
+            ReflowLayout layout,
+            int targetWidth,
+            int tileHeight,
+            @Nullable CancellationSignal cancellationSignal
+    ) {
         List<Bitmap> tiles = new ArrayList<>();
-        int totalHeight = Math.max(1, layout.outputHeight);
-        int safeTileHeight = Math.max(1, tileHeight);
-        for (int tileTop = 0; tileTop < totalHeight; tileTop += safeTileHeight) {
-            int currentTileHeight = Math.min(safeTileHeight, totalHeight - tileTop);
-            Bitmap tile = Bitmap.createBitmap(targetWidth, currentTileHeight, Bitmap.Config.RGB_565);
-            Canvas canvas = new Canvas(tile);
-            canvas.drawColor(BACKGROUND_COLOR);
-            drawTileWords(canvas, source, layout, targetWidth, tileTop, currentTileHeight);
-            tiles.add(tile);
+        try {
+            int totalHeight = Math.max(1, layout.outputHeight);
+            int safeTileHeight = Math.max(1, tileHeight);
+            for (int tileTop = 0; tileTop < totalHeight; tileTop += safeTileHeight) {
+                ReflowPixelMap.throwIfCanceledSignal(cancellationSignal);
+                int currentTileHeight = Math.min(safeTileHeight, totalHeight - tileTop);
+                Bitmap tile = Bitmap.createBitmap(targetWidth, currentTileHeight, Bitmap.Config.RGB_565);
+                boolean added = false;
+                try {
+                    Canvas canvas = new Canvas(tile);
+                    canvas.drawColor(BACKGROUND_COLOR);
+                    drawTileWords(canvas, source, layout, targetWidth, tileTop, currentTileHeight, cancellationSignal);
+                    tiles.add(tile);
+                    added = true;
+                } finally {
+                    if (!added) {
+                        tile.recycle();
+                    }
+                }
+            }
+            return new ReflowBitmapProcessor.Result(tiles, totalHeight);
+        } catch (OperationCanceledException exception) {
+            recycleTiles(tiles);
+            throw exception;
         }
-        return new ReflowBitmapProcessor.Result(tiles, totalHeight);
     }
 
     ReflowBitmapProcessor.Result scaleToWidthTiles(Bitmap source, int targetWidth, int minOutputHeight, int tileHeight) {
+        return scaleToWidthTiles(source, targetWidth, minOutputHeight, tileHeight, null);
+    }
+
+    ReflowBitmapProcessor.Result scaleToWidthTiles(
+            Bitmap source,
+            int targetWidth,
+            int minOutputHeight,
+            int tileHeight,
+            @Nullable CancellationSignal cancellationSignal
+    ) {
         int totalHeight = Math.max(1, Math.round(source.getHeight() * (targetWidth / (float) source.getWidth())));
         totalHeight = Math.max(totalHeight, minOutputHeight);
         int safeTileHeight = Math.max(1, tileHeight);
         List<Bitmap> tiles = new ArrayList<>();
-        for (int tileTop = 0; tileTop < totalHeight; tileTop += safeTileHeight) {
-            int currentTileHeight = Math.min(safeTileHeight, totalHeight - tileTop);
-            Bitmap tile = Bitmap.createBitmap(targetWidth, currentTileHeight, Bitmap.Config.RGB_565);
-            Canvas canvas = new Canvas(tile);
-            canvas.drawColor(BACKGROUND_COLOR);
-            Rect sourceRect = scaledSourceRect(source, totalHeight, tileTop, currentTileHeight);
-            canvas.drawBitmap(source, sourceRect, new Rect(0, 0, targetWidth, currentTileHeight), paint);
-            tiles.add(tile);
+        try {
+            for (int tileTop = 0; tileTop < totalHeight; tileTop += safeTileHeight) {
+                ReflowPixelMap.throwIfCanceledSignal(cancellationSignal);
+                int currentTileHeight = Math.min(safeTileHeight, totalHeight - tileTop);
+                Bitmap tile = Bitmap.createBitmap(targetWidth, currentTileHeight, Bitmap.Config.RGB_565);
+                boolean added = false;
+                try {
+                    Canvas canvas = new Canvas(tile);
+                    canvas.drawColor(BACKGROUND_COLOR);
+                    Rect sourceRect = scaledSourceRect(source, totalHeight, tileTop, currentTileHeight);
+                    canvas.drawBitmap(source, sourceRect, new Rect(0, 0, targetWidth, currentTileHeight), paint);
+                    tiles.add(tile);
+                    added = true;
+                } finally {
+                    if (!added) {
+                        tile.recycle();
+                    }
+                }
+            }
+            return new ReflowBitmapProcessor.Result(tiles, totalHeight);
+        } catch (OperationCanceledException exception) {
+            recycleTiles(tiles);
+            throw exception;
         }
-        return new ReflowBitmapProcessor.Result(tiles, totalHeight);
     }
 
     private void drawTileWords(
@@ -52,10 +104,15 @@ final class ReflowBitmapRenderer {
             ReflowLayout layout,
             int targetWidth,
             int tileTop,
-            int tileHeight
+            int tileHeight,
+            @Nullable CancellationSignal cancellationSignal
     ) {
         int tileBottom = tileTop + tileHeight;
-        for (ReflowPlacedWord placedWord : layout.placedWords) {
+        for (int i = 0; i < layout.placedWords.size(); i++) {
+            if ((i & 63) == 0) {
+                ReflowPixelMap.throwIfCanceledSignal(cancellationSignal);
+            }
+            ReflowPlacedWord placedWord = layout.placedWords.get(i);
             Rect destination = placedWord.destination;
             if (destination.bottom <= tileTop || destination.top >= tileBottom) {
                 continue;
@@ -99,5 +156,13 @@ final class ReflowBitmapRenderer {
         right = Math.max(left + 1, Math.min(source.right, right));
         bottom = Math.max(top + 1, Math.min(source.bottom, bottom));
         return new Rect(left, top, right, bottom);
+    }
+
+    private void recycleTiles(List<Bitmap> tiles) {
+        for (Bitmap tile : tiles) {
+            if (tile != null && !tile.isRecycled()) {
+                tile.recycle();
+            }
+        }
     }
 }

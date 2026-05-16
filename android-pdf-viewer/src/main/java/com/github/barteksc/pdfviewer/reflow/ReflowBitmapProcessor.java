@@ -3,8 +3,11 @@ package com.github.barteksc.pdfviewer.reflow;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Rect;
+import android.os.CancellationSignal;
+import android.util.Log;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -15,7 +18,13 @@ import java.util.List;
  * reader apps that re-layout rendered page pixels.
  */
 public class ReflowBitmapProcessor {
-    private static final int DEFAULT_TILE_HEIGHT = 2048;
+    private static final String TAG = ReflowBitmapProcessor.class.getSimpleName();
+    private static final boolean TRACE_REFLOW_TIMING = false;
+    private static final int SMALL_TILE_HEIGHT = 2048;
+    private static final int LARGE_TILE_HEIGHT = 4096;
+    private static final int RGB_565_BYTES_PER_PIXEL = 2;
+    private static final long MIN_REFLOW_CACHE_BYTES = 16L * 1024L * 1024L;
+    private static final long MAX_REFLOW_CACHE_BYTES = 48L * 1024L * 1024L;
 
     private final ReflowAnalyzer analyzer = new ReflowAnalyzer();
     private final ReflowLayoutEngine layoutEngine = new ReflowLayoutEngine();
@@ -53,23 +62,95 @@ public class ReflowBitmapProcessor {
     }
 
     public Result reflowToResult(@NonNull Bitmap source, int targetWidth, int minOutputHeight, int targetTextHeightPx) {
+        return reflowToResult(source, targetWidth, minOutputHeight, targetTextHeightPx, null);
+    }
+
+    public Result reflowToResult(
+            @NonNull Bitmap source,
+            int targetWidth,
+            int minOutputHeight,
+            int targetTextHeightPx,
+            @Nullable CancellationSignal cancellationSignal
+    ) {
         if (source.getWidth() <= 0 || source.getHeight() <= 0 || targetWidth <= 0) {
             return Result.empty();
         }
 
-        ReflowPixelMap pixels = new ReflowPixelMap(source);
-        Rect content = analyzer.findContentBounds(pixels, new Rect(0, 0, pixels.width, pixels.height));
+        long totalStart = traceStart();
+        int tileHeight = chooseTileHeight(targetWidth);
+        ReflowPixelMap.throwIfCanceledSignal(cancellationSignal);
+        long stageStart = traceStart();
+        ReflowPixelMap pixels = new ReflowPixelMap(source, cancellationSignal);
+        traceTiming("pixel map", stageStart);
+        ReflowPixelMap.throwIfCanceledSignal(cancellationSignal);
+
+        stageStart = traceStart();
+        Rect content = analyzer.findContentBounds(pixels, new Rect(0, 0, pixels.width, pixels.height), cancellationSignal);
+        traceTiming("content bounds", stageStart);
         if (content.isEmpty()) {
-            return renderer.scaleToWidthTiles(source, targetWidth, Math.max(1, minOutputHeight), DEFAULT_TILE_HEIGHT);
+            stageStart = traceStart();
+            Result result = renderer.scaleToWidthTiles(
+                    source,
+                    targetWidth,
+                    Math.max(1, minOutputHeight),
+                    tileHeight,
+                    cancellationSignal
+            );
+            traceTiming("fallback render tiles", stageStart);
+            traceTiming("total reflow", totalStart);
+            return result;
         }
 
-        List<ReflowLineBlock> lines = analyzer.collectLines(pixels, content);
+        ReflowPixelMap.throwIfCanceledSignal(cancellationSignal);
+        stageStart = traceStart();
+        List<ReflowLineBlock> lines = analyzer.collectLines(pixels, content, cancellationSignal);
+        traceTiming("analysis", stageStart);
         if (lines.isEmpty()) {
-            return renderer.scaleToWidthTiles(source, targetWidth, Math.max(1, minOutputHeight), DEFAULT_TILE_HEIGHT);
+            stageStart = traceStart();
+            Result result = renderer.scaleToWidthTiles(
+                    source,
+                    targetWidth,
+                    Math.max(1, minOutputHeight),
+                    tileHeight,
+                    cancellationSignal
+            );
+            traceTiming("fallback render tiles", stageStart);
+            traceTiming("total reflow", totalStart);
+            return result;
         }
 
-        ReflowLayout layout = layoutEngine.layout(lines, targetWidth, minOutputHeight, targetTextHeightPx);
-        return renderer.renderTiles(source, layout, targetWidth, DEFAULT_TILE_HEIGHT);
+        ReflowPixelMap.throwIfCanceledSignal(cancellationSignal);
+        stageStart = traceStart();
+        ReflowLayout layout = layoutEngine.layout(lines, targetWidth, minOutputHeight, targetTextHeightPx, cancellationSignal);
+        traceTiming("layout", stageStart);
+        ReflowPixelMap.throwIfCanceledSignal(cancellationSignal);
+        stageStart = traceStart();
+        Result result = renderer.renderTiles(source, layout, targetWidth, tileHeight, cancellationSignal);
+        traceTiming("render tiles", stageStart);
+        traceTiming("total reflow", totalStart);
+        return result;
+    }
+
+    private static int chooseTileHeight(int targetWidth) {
+        long cacheBudget = calculateDefaultCacheBudgetBytes();
+        long largeTileBytes = (long) Math.max(1, targetWidth) * LARGE_TILE_HEIGHT * RGB_565_BYTES_PER_PIXEL;
+        return largeTileBytes <= cacheBudget / 3L ? LARGE_TILE_HEIGHT : SMALL_TILE_HEIGHT;
+    }
+
+    private static long calculateDefaultCacheBudgetBytes() {
+        long runtimeBudget = Runtime.getRuntime().maxMemory() / 8L;
+        return Math.max(MIN_REFLOW_CACHE_BYTES, Math.min(MAX_REFLOW_CACHE_BYTES, runtimeBudget));
+    }
+
+    private static long traceStart() {
+        return TRACE_REFLOW_TIMING ? System.nanoTime() : 0L;
+    }
+
+    private static void traceTiming(String stage, long startNanos) {
+        if (TRACE_REFLOW_TIMING) {
+            long elapsedMicros = (System.nanoTime() - startNanos) / 1000L;
+            Log.d(TAG, stage + ": " + (elapsedMicros / 1000f) + " ms");
+        }
     }
 
     public static final class Result {

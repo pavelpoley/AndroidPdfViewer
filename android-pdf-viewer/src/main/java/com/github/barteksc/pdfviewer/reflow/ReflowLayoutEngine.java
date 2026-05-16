@@ -1,6 +1,9 @@
 package com.github.barteksc.pdfviewer.reflow;
 
 import android.graphics.Rect;
+import android.os.CancellationSignal;
+
+import androidx.annotation.Nullable;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -16,10 +19,20 @@ final class ReflowLayoutEngine {
             int minOutputHeight,
             int targetTextHeightPx
     ) {
+        return layout(lines, targetWidth, minOutputHeight, targetTextHeightPx, null);
+    }
+
+    ReflowLayout layout(
+            List<ReflowLineBlock> lines,
+            int targetWidth,
+            int minOutputHeight,
+            int targetTextHeightPx,
+            @Nullable CancellationSignal cancellationSignal
+    ) {
         int padding = Math.max(8, targetWidth / 34);
         int contentRight = Math.max(padding + 1, targetWidth - padding);
         int contentWidth = contentRight - padding;
-        float layoutScale = calculateLayoutScale(lines, targetTextHeightPx);
+        float layoutScale = calculateLayoutScale(lines, targetTextHeightPx, cancellationSignal);
 
         List<ReflowPlacedWord> placedWords = new ArrayList<>();
         List<ReflowPlacedWord> currentRow = new ArrayList<>();
@@ -29,7 +42,11 @@ final class ReflowLayoutEngine {
         int previousSourceLineHeight = 0;
         boolean first = true;
 
-        for (ReflowLineBlock line : lines) {
+        for (int lineIndex = 0; lineIndex < lines.size(); lineIndex++) {
+            if ((lineIndex & 31) == 0) {
+                ReflowPixelMap.throwIfCanceledSignal(cancellationSignal);
+            }
+            ReflowLineBlock line = lines.get(lineIndex);
             if (!first) {
                 flushRow(currentRow, placedWords);
                 int completedRowHeight = Math.max(1, rowHeight);
@@ -80,13 +97,21 @@ final class ReflowLayoutEngine {
         return new ReflowLayout(placedWords, outputHeight);
     }
 
-    private float calculateLayoutScale(List<ReflowLineBlock> lines, int targetTextHeightPx) {
+    private float calculateLayoutScale(
+            List<ReflowLineBlock> lines,
+            int targetTextHeightPx,
+            @Nullable CancellationSignal cancellationSignal
+    ) {
         if (targetTextHeightPx <= 0) {
             return 1f;
         }
 
         List<Integer> heights = new ArrayList<>();
-        for (ReflowLineBlock line : lines) {
+        for (int i = 0; i < lines.size(); i++) {
+            if ((i & 31) == 0) {
+                ReflowPixelMap.throwIfCanceledSignal(cancellationSignal);
+            }
+            ReflowLineBlock line = lines.get(i);
             if (line.sourceHeight > 0) {
                 heights.add(line.sourceHeight);
             }

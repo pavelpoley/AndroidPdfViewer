@@ -1,5 +1,6 @@
 package com.github.barteksc.pdfviewer;
 
+import android.os.CancellationSignal;
 import android.os.Handler;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -23,10 +24,10 @@ final class ReflowRenderCoordinator {
     private final Runnable renderVisibleRunnable = this::renderVisiblePages;
 
     private ReflowRenderOptions options;
-    private int visibleStart;
-    private int visibleEnd;
-    private int renderGeneration;
-    private boolean disposed;
+    private volatile int visibleStart;
+    private volatile int visibleEnd;
+    private volatile int renderGeneration;
+    private volatile boolean disposed;
 
     ReflowRenderCoordinator(
             Handler mainHandler,
@@ -50,8 +51,14 @@ final class ReflowRenderCoordinator {
         if (disposed) {
             return;
         }
+        updateVisibleRange();
+        cancelFarRenderRequests();
         mainHandler.removeCallbacks(renderVisibleRunnable);
-        mainHandler.postDelayed(renderVisibleRunnable, RENDER_DEBOUNCE_MS);
+        if (hasVisibleRenderCandidate()) {
+            mainHandler.post(renderVisibleRunnable);
+        } else {
+            mainHandler.postDelayed(renderVisibleRunnable, RENDER_DEBOUNCE_MS);
+        }
     }
 
     void resetForViewport(ReflowRenderOptions newOptions) {
@@ -82,6 +89,31 @@ final class ReflowRenderCoordinator {
             return;
         }
 
+        updateVisibleRange();
+
+        for (int page = visibleStart; page <= visibleEnd; page++) {
+            requestRenderPage(page);
+        }
+
+        int renderStart = Math.max(0, visibleStart - PAGE_PREFETCH_RADIUS);
+        int renderEnd = Math.min(pageSlots.size() - 1, visibleEnd + PAGE_PREFETCH_RADIUS);
+        if (cachedBitmapBytes() < options.maxCachedBitmapBytes) {
+            for (int distance = 1; distance <= PAGE_PREFETCH_RADIUS; distance++) {
+                requestRenderPage(visibleStart - distance);
+                requestRenderPage(visibleEnd + distance);
+            }
+        }
+
+        recycleFarPages(renderStart, renderEnd);
+    }
+
+    private void updateVisibleRange() {
+        if (pageSlots.isEmpty()) {
+            visibleStart = 0;
+            visibleEnd = 0;
+            return;
+        }
+
         int viewportTop = scrollView.getScrollY();
         int viewportBottom = viewportTop + Math.max(1, scrollView.getHeight());
         int firstVisible = -1;
@@ -106,21 +138,6 @@ final class ReflowRenderCoordinator {
 
         visibleStart = Math.max(0, firstVisible);
         visibleEnd = Math.max(visibleStart, lastVisible);
-
-        for (int page = visibleStart; page <= visibleEnd; page++) {
-            requestRenderPage(page);
-        }
-
-        int renderStart = Math.max(0, visibleStart - PAGE_PREFETCH_RADIUS);
-        int renderEnd = Math.min(pageSlots.size() - 1, visibleEnd + PAGE_PREFETCH_RADIUS);
-        if (cachedBitmapBytes() < options.maxCachedBitmapBytes) {
-            for (int distance = 1; distance <= PAGE_PREFETCH_RADIUS; distance++) {
-                requestRenderPage(visibleStart - distance);
-                requestRenderPage(visibleEnd + distance);
-            }
-        }
-
-        recycleFarPages(renderStart, renderEnd);
     }
 
     private void requestRenderPage(int page) {
@@ -135,7 +152,7 @@ final class ReflowRenderCoordinator {
 
         slot.markRenderRequested();
         int generation = renderGeneration;
-        session.renderPage(
+        CancellationSignal cancellationSignal = session.renderPage(
                 page,
                 options,
                 loadConfig.annotationRendering,
@@ -152,30 +169,57 @@ final class ReflowRenderCoordinator {
                     }
 
                     @Override
-                    public void onRendered(int callbackPage, ReflowBitmapProcessor.Result result) {
-                        handleRenderedPage(generation, callbackPage, result);
+                    public void onRendered(
+                            int callbackPage,
+                            ReflowBitmapProcessor.Result result,
+                            CancellationSignal callbackCancellationSignal
+                    ) {
+                        handleRenderedPage(generation, callbackPage, result, callbackCancellationSignal);
                     }
 
                     @Override
-                    public void onSkipped(int callbackPage) {
-                        handleSkippedPage(generation, callbackPage);
+                    public void onSkipped(int callbackPage, CancellationSignal callbackCancellationSignal) {
+                        handleSkippedPage(generation, callbackPage, callbackCancellationSignal);
                     }
 
                     @Override
-                    public void onFailed(int callbackPage) {
-                        handleFailedPage(generation, callbackPage);
+                    public void onFailed(int callbackPage, CancellationSignal callbackCancellationSignal) {
+                        handleFailedPage(generation, callbackPage, callbackCancellationSignal);
                     }
                 }
         );
+        slot.setRenderCancellationSignal(cancellationSignal);
     }
 
-    private void handleRenderedPage(int generation, int page, ReflowBitmapProcessor.Result result) {
+    private boolean hasVisibleRenderCandidate() {
+        for (int page = visibleStart; page <= visibleEnd && page < pageSlots.size(); page++) {
+            if (page < 0) {
+                continue;
+            }
+            ReflowPageSlot slot = pageSlots.get(page);
+            if (!slot.hasRenderedContent() && !slot.renderRequested) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void handleRenderedPage(
+            int generation,
+            int page,
+            ReflowBitmapProcessor.Result result,
+            CancellationSignal cancellationSignal
+    ) {
         if (!isCurrent(generation) || page < 0 || page >= pageSlots.size()) {
             result.recycle();
             return;
         }
 
         ReflowPageSlot slot = pageSlots.get(page);
+        if (!slot.isRenderCancellationSignal(cancellationSignal)) {
+            result.recycle();
+            return;
+        }
         ReflowScrollAnchor anchor = ReflowScrollAnchor.capture(pageSlots, scrollView.getScrollY());
         slot.bindResult(result);
         restoreAnchorAfterLayout(anchor);
@@ -185,15 +229,29 @@ final class ReflowRenderCoordinator {
         );
     }
 
-    private void handleSkippedPage(int generation, int page) {
+    private void handleSkippedPage(int generation, int page, CancellationSignal cancellationSignal) {
         if (isCurrent(generation) && page >= 0 && page < pageSlots.size()) {
-            pageSlots.get(page).markRenderSkipped();
+            ReflowPageSlot slot = pageSlots.get(page);
+            if (slot.isRenderCancellationSignal(cancellationSignal)) {
+                slot.markRenderSkipped();
+            }
         }
     }
 
-    private void handleFailedPage(int generation, int page) {
+    private void handleFailedPage(int generation, int page, CancellationSignal cancellationSignal) {
         if (isCurrent(generation) && page >= 0 && page < pageSlots.size()) {
-            pageSlots.get(page).markRenderFailed();
+            ReflowPageSlot slot = pageSlots.get(page);
+            if (slot.isRenderCancellationSignal(cancellationSignal)) {
+                slot.markRenderFailed();
+            }
+        }
+    }
+
+    private void cancelFarRenderRequests() {
+        for (ReflowPageSlot slot : pageSlots) {
+            if (slot.renderRequested && !isNearVisibleRange(slot.page)) {
+                slot.cancelRenderRequest();
+            }
         }
     }
 

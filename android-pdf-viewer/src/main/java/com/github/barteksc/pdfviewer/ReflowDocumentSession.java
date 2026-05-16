@@ -3,7 +3,9 @@ package com.github.barteksc.pdfviewer;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Color;
+import android.os.CancellationSignal;
 import android.os.Handler;
+import android.os.OperationCanceledException;
 import android.util.Log;
 
 import androidx.annotation.Nullable;
@@ -19,6 +21,7 @@ import java.util.concurrent.RejectedExecutionException;
 
 final class ReflowDocumentSession {
     private static final String TAG = ReflowDocumentSession.class.getSimpleName();
+    private static final boolean TRACE_REFLOW_TIMING = false;
 
     private final Object lock = new Object();
     private final Context appContext;
@@ -46,18 +49,28 @@ final class ReflowDocumentSession {
         }
     }
 
-    void renderPage(
+    CancellationSignal renderPage(
             int page,
             ReflowRenderOptions options,
             boolean annotationRendering,
             ReflowBitmapProcessor processor,
             PageRenderCallback callback
     ) {
+        CancellationSignal cancellationSignal = new CancellationSignal();
         try {
-            executor.execute(() -> renderPageOnExecutor(page, options, annotationRendering, processor, callback));
+            executor.execute(() -> renderPageOnExecutor(
+                    page,
+                    options,
+                    annotationRendering,
+                    processor,
+                    callback,
+                    cancellationSignal
+            ));
         } catch (RejectedExecutionException ignored) {
-            postRenderSkipped(callback, page);
+            cancellationSignal.cancel();
+            postRenderSkipped(callback, page, cancellationSignal);
         }
+        return cancellationSignal;
     }
 
     void close() {
@@ -127,10 +140,11 @@ final class ReflowDocumentSession {
             ReflowRenderOptions options,
             boolean annotationRendering,
             ReflowBitmapProcessor processor,
-            PageRenderCallback callback
+            PageRenderCallback callback,
+            CancellationSignal cancellationSignal
     ) {
-        if (isClosed() || callback.isCancelled() || !callback.shouldRender(page)) {
-            postRenderSkipped(callback, page);
+        if (shouldCancelRender(page, callback, cancellationSignal)) {
+            postRenderSkipped(callback, page, cancellationSignal);
             return;
         }
 
@@ -141,33 +155,52 @@ final class ReflowDocumentSession {
             document = pdfDocument;
         }
         if (core == null || document == null) {
-            postRenderSkipped(callback, page);
+            cancellationSignal.cancel();
+            postRenderSkipped(callback, page, cancellationSignal);
             return;
         }
 
+        long stageStart = traceStart();
         Bitmap pageBitmap = renderSourcePage(core, document, page, options, annotationRendering);
+        traceTiming("page " + page + " source render", stageStart);
         if (pageBitmap == null) {
-            postRenderFailed(callback, page);
+            if (cancellationSignal.isCanceled()) {
+                postRenderSkipped(callback, page, cancellationSignal);
+                return;
+            }
+            postRenderFailed(callback, page, cancellationSignal);
+            return;
+        }
+        if (shouldCancelRender(page, callback, cancellationSignal)) {
+            pageBitmap.recycle();
+            postRenderSkipped(callback, page, cancellationSignal);
             return;
         }
 
         ReflowBitmapProcessor.Result reflowed;
         try {
+            stageStart = traceStart();
             reflowed = processor.reflowToResult(
                     pageBitmap,
                     options.targetWidth,
                     options.minOutputHeight,
-                    options.targetTextHeightPx
+                    options.targetTextHeightPx,
+                    cancellationSignal
             );
+            traceTiming("page " + page + " bitmap reflow", stageStart);
+        } catch (OperationCanceledException ignored) {
+            postRenderSkipped(callback, page, cancellationSignal);
+            return;
         } finally {
             pageBitmap.recycle();
         }
 
-        if (isClosed() || callback.isCancelled()) {
+        if (shouldCancelRender(page, callback, cancellationSignal)) {
             reflowed.recycle();
+            postRenderSkipped(callback, page, cancellationSignal);
             return;
         }
-        mainHandler.post(() -> callback.onRendered(page, reflowed));
+        mainHandler.post(() -> callback.onRendered(page, reflowed, cancellationSignal));
     }
 
     @Nullable
@@ -229,6 +262,21 @@ final class ReflowDocumentSession {
         }
     }
 
+    private boolean shouldCancelRender(
+            int page,
+            PageRenderCallback callback,
+            CancellationSignal cancellationSignal
+    ) {
+        boolean shouldCancel = isClosed()
+                || cancellationSignal.isCanceled()
+                || callback.isCancelled()
+                || !callback.shouldRender(page);
+        if (shouldCancel) {
+            cancellationSignal.cancel();
+        }
+        return shouldCancel;
+    }
+
     private void postOpenError(OpenCallback callback, Throwable throwable) {
         mainHandler.post(() -> {
             if (!isClosed() && !callback.isCancelled()) {
@@ -237,12 +285,12 @@ final class ReflowDocumentSession {
         });
     }
 
-    private void postRenderSkipped(PageRenderCallback callback, int page) {
-        mainHandler.post(() -> callback.onSkipped(page));
+    private void postRenderSkipped(PageRenderCallback callback, int page, CancellationSignal cancellationSignal) {
+        mainHandler.post(() -> callback.onSkipped(page, cancellationSignal));
     }
 
-    private void postRenderFailed(PageRenderCallback callback, int page) {
-        mainHandler.post(() -> callback.onFailed(page));
+    private void postRenderFailed(PageRenderCallback callback, int page, CancellationSignal cancellationSignal) {
+        mainHandler.post(() -> callback.onFailed(page, cancellationSignal));
     }
 
     private void closeDocumentInBackground(PdfiumCore core, PdfDocument document) {
@@ -254,6 +302,17 @@ final class ReflowDocumentSession {
             core.closeDocument(document);
         } catch (Throwable throwable) {
             Log.w(TAG, "Unable to close reflow document", throwable);
+        }
+    }
+
+    private static long traceStart() {
+        return TRACE_REFLOW_TIMING ? System.nanoTime() : 0L;
+    }
+
+    private static void traceTiming(String stage, long startNanos) {
+        if (TRACE_REFLOW_TIMING) {
+            long elapsedMicros = (System.nanoTime() - startNanos) / 1000L;
+            Log.d(TAG, stage + ": " + (elapsedMicros / 1000f) + " ms");
         }
     }
 
@@ -270,10 +329,10 @@ final class ReflowDocumentSession {
 
         boolean isCancelled();
 
-        void onRendered(int page, ReflowBitmapProcessor.Result result);
+        void onRendered(int page, ReflowBitmapProcessor.Result result, CancellationSignal cancellationSignal);
 
-        void onSkipped(int page);
+        void onSkipped(int page, CancellationSignal cancellationSignal);
 
-        void onFailed(int page);
+        void onFailed(int page, CancellationSignal cancellationSignal);
     }
 }

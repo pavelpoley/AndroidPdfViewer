@@ -3,6 +3,7 @@ package com.github.barteksc.pdfviewer;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Color;
+import android.os.CancellationSignal;
 import android.view.Gravity;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
@@ -31,6 +32,8 @@ final class ReflowPageSlot {
     ReflowBitmapProcessor.Result result;
     @Nullable
     LinearLayout tilesContainer;
+    @Nullable
+    private CancellationSignal renderCancellationSignal;
 
     boolean renderRequested;
     boolean failed;
@@ -99,8 +102,25 @@ final class ReflowPageSlot {
         placeholder.setText("Reflowing page " + (page + 1) + "...");
     }
 
+    void setRenderCancellationSignal(@Nullable CancellationSignal cancellationSignal) {
+        renderCancellationSignal = cancellationSignal;
+    }
+
+    boolean isRenderCancellationSignal(CancellationSignal cancellationSignal) {
+        return renderCancellationSignal == cancellationSignal;
+    }
+
+    void cancelRenderRequest() {
+        if (renderCancellationSignal != null && !renderCancellationSignal.isCanceled()) {
+            renderCancellationSignal.cancel();
+        }
+        renderCancellationSignal = null;
+        renderRequested = false;
+    }
+
     void markRenderSkipped() {
         renderRequested = false;
+        renderCancellationSignal = null;
         if (result == null && !failed) {
             placeholder.setText(defaultPageText(page));
         }
@@ -108,13 +128,15 @@ final class ReflowPageSlot {
 
     void markRenderFailed() {
         renderRequested = false;
+        renderCancellationSignal = null;
         failed = true;
         placeholder.setText(failedPageText(page));
     }
 
     void bindResult(ReflowBitmapProcessor.Result newResult) {
-        releaseBitmap();
+        releaseRenderedContent();
         renderRequested = false;
+        renderCancellationSignal = null;
         failed = false;
         result = newResult;
 
@@ -165,11 +187,15 @@ final class ReflowPageSlot {
     }
 
     void releaseBitmap() {
+        cancelRenderRequest();
+        releaseRenderedContent();
+    }
+
+    private void releaseRenderedContent() {
         if (result != null) {
             result.recycle();
         }
         result = null;
-        renderRequested = false;
         for (ImageView tileView : tileViews) {
             tileView.setImageDrawable(null);
         }
