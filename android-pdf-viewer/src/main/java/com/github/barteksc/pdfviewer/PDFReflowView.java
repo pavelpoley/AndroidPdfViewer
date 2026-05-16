@@ -1,7 +1,6 @@
 package com.github.barteksc.pdfviewer;
 
 import android.content.Context;
-import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Handler;
@@ -10,8 +9,6 @@ import android.util.AttributeSet;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.ViewGroup;
-import android.widget.FrameLayout;
-import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -19,24 +16,18 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-import com.github.barteksc.pdfviewer.reflow.ReflowBitmapProcessor;
 import com.github.barteksc.pdfviewer.source.AssetSource;
 import com.github.barteksc.pdfviewer.source.ByteArraySource;
 import com.github.barteksc.pdfviewer.source.DocumentSource;
 import com.github.barteksc.pdfviewer.source.FileSource;
 import com.github.barteksc.pdfviewer.source.InputStreamSource;
 import com.github.barteksc.pdfviewer.source.UriSource;
-import com.vivlio.android.pdfium.PdfDocument;
-import com.vivlio.android.pdfium.PdfiumCore;
 import com.vivlio.android.pdfium.util.Size;
 
 import java.io.File;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.RejectedExecutionException;
 
 /**
  * Experimental bitmap-based PDF reading mode.
@@ -52,33 +43,23 @@ public class PDFReflowView extends ScrollView {
     private static final float DEFAULT_TEXT_SIZE_DP = 15f;
     private static final int DEFAULT_MAX_SOURCE_WIDTH = 1200;
     private static final int DEFAULT_MAX_SOURCE_PIXELS = 1_600_000;
-    private static final int PAGE_PREFETCH_RADIUS = 1;
-    private static final int MAX_RENDERED_PAGES = 4;
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final LinearLayout pagesContainer;
-    private final List<PageSlot> pageSlots = new ArrayList<>();
-    private final ReflowBitmapProcessor processor = new ReflowBitmapProcessor();
-    private final Runnable renderVisibleRunnable = this::renderVisiblePages;
+    private final List<ReflowPageSlot> pageSlots = new ArrayList<>();
 
-    @Nullable
-    private ExecutorService executorService;
     @Nullable
     private Configurator waitingDocumentConfigurator;
     @Nullable
     private TextView statusView;
     @Nullable
-    private PdfiumCore pdfiumCore;
+    private ReflowDocumentSession documentSession;
     @Nullable
-    private PdfDocument pdfDocument;
+    private ReflowRenderCoordinator renderCoordinator;
     @Nullable
-    private RenderOptions currentOptions;
-    @Nullable
-    private Configurator currentConfigurator;
+    private ReflowLoadConfig currentConfig;
 
     private volatile int loadGeneration = 0;
-    private volatile int visibleStart = 0;
-    private volatile int visibleEnd = 0;
 
     public PDFReflowView(Context context) {
         this(context, null);
@@ -168,521 +149,117 @@ public class PDFReflowView extends ScrollView {
         pagesContainer.removeAllViews();
         pageSlots.clear();
         scrollTo(0, 0);
-        visibleStart = 0;
-        visibleEnd = 0;
 
         int generation = ++loadGeneration;
-        RenderOptions options = createRenderOptions(configurator);
+        ReflowLoadConfig loadConfig = configurator.toLoadConfig();
+        ReflowRenderOptions options = createRenderOptions(loadConfig);
 
         showStatus("Opening PDF...");
-        ExecutorService executor = Executors.newSingleThreadExecutor();
-        executorService = executor;
-        executor.execute(() -> openDocument(configurator.copy(), options, generation));
+        ReflowDocumentSession session = new ReflowDocumentSession(
+                getContext().getApplicationContext(),
+                mainHandler,
+                loadConfig
+        );
+        documentSession = session;
+        session.open(new ReflowDocumentSession.OpenCallback() {
+            @Override
+            public void onOpened(ReflowDocumentSession openedSession, Size[] pageSizes) {
+                setupDocument(loadConfig, options, generation, openedSession, pageSizes);
+            }
+
+            @Override
+            public void onError(Throwable throwable) {
+                postError(loadConfig, generation, throwable);
+            }
+
+            @Override
+            public boolean isCancelled() {
+                return generation != loadGeneration || Thread.currentThread().isInterrupted();
+            }
+        });
     }
 
-    private RenderOptions createRenderOptions(Configurator configurator) {
+    private ReflowRenderOptions createRenderOptions(ReflowLoadConfig loadConfig) {
         int targetWidth = getPageWidth();
         int minOutputHeight = Math.max(1, getHeight() / 2);
-        return RenderOptions.from(
-                configurator,
+        return new ReflowRenderOptions(
                 targetWidth,
                 minOutputHeight,
-                dp(configurator.pageSpacingDp),
-                Math.max(1, dp(configurator.textSizeDp))
+                dp(loadConfig.pageSpacingDp),
+                Math.max(1, dp(loadConfig.textSizeDp)),
+                loadConfig.sourceScale,
+                loadConfig.maxSourceWidthPx,
+                loadConfig.maxSourcePixels
         );
     }
 
-    private void openDocument(
-            @NonNull Configurator configurator,
-            @NonNull RenderOptions options,
-            int generation
-    ) {
-        PdfiumCore core = new PdfiumCore(getContext().getApplicationContext());
-        PdfDocument document = null;
-        try {
-            document = configurator.documentSource.createDocument(
-                    getContext().getApplicationContext(),
-                    core,
-                    configurator.password
-            );
-            int pageCount = core.getPageCount(document);
-            if (pageCount <= 0) {
-                closeDocument(core, document);
-                postError(configurator, generation, new IllegalStateException("PDF has no pages"));
-                return;
-            }
-
-            Size[] pageSizes = new Size[pageCount];
-            for (int page = 0; page < pageCount; page++) {
-                if (isCancelled(generation)) {
-                    closeDocument(core, document);
-                    return;
-                }
-                pageSizes[page] = core.getPageSize(document, page);
-            }
-
-            PdfDocument openedDocument = document;
-            mainHandler.post(() -> setupDocument(
-                    configurator,
-                    options,
-                    generation,
-                    core,
-                    openedDocument,
-                    pageSizes
-            ));
-        } catch (Throwable throwable) {
-            if (document != null) {
-                closeDocument(core, document);
-            }
-            postError(configurator, generation, throwable);
-        }
-    }
-
     private void setupDocument(
-            Configurator configurator,
-            RenderOptions options,
+            ReflowLoadConfig loadConfig,
+            ReflowRenderOptions options,
             int generation,
-            PdfiumCore core,
-            PdfDocument document,
+            ReflowDocumentSession session,
             Size[] pageSizes
     ) {
         if (generation != loadGeneration) {
-            closeDocumentInBackground(core, document);
+            session.close();
             return;
         }
 
         removeStatus();
-        pdfiumCore = core;
-        pdfDocument = document;
-        currentOptions = options;
-        currentConfigurator = configurator;
+        currentConfig = loadConfig;
         pageSlots.clear();
         pagesContainer.removeAllViews();
 
         for (int page = 0; page < pageSizes.length; page++) {
-            PageSlot slot = createPageSlot(page, pageSizes[page], options);
+            ReflowPageSlot slot = ReflowPageSlot.create(getContext(), page, pageSizes[page], options, dp(16));
             pageSlots.add(slot);
             pagesContainer.addView(slot.container, slot.layoutParams);
         }
 
-        if (configurator.onLoadCompleteListener != null) {
-            configurator.onLoadCompleteListener.loadComplete(pageSizes.length);
+        renderCoordinator = new ReflowRenderCoordinator(
+                mainHandler,
+                this,
+                pagesContainer,
+                pageSlots,
+                session,
+                loadConfig,
+                options
+        );
+
+        if (loadConfig.onLoadCompleteListener != null) {
+            loadConfig.onLoadCompleteListener.loadComplete(pageSizes.length);
         }
 
         pagesContainer.post(this::scheduleVisibleRender);
     }
 
-    private PageSlot createPageSlot(int page, Size pageSize, RenderOptions options) {
-        int estimatedHeight = estimatePageHeight(pageSize, options);
-        FrameLayout container = new FrameLayout(getContext());
-        container.setBackgroundColor(Color.WHITE);
-
-        TextView placeholder = new TextView(getContext());
-        placeholder.setGravity(Gravity.CENTER);
-        placeholder.setTextColor(Color.DKGRAY);
-        placeholder.setTextSize(15f);
-        placeholder.setText("Page " + (page + 1));
-        int padding = dp(16);
-        placeholder.setPadding(padding, padding, padding, padding);
-
-        container.addView(placeholder, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-        ));
-
-        LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                estimatedHeight
-        );
-        if (page > 0) {
-            layoutParams.topMargin = options.pageSpacingPx;
-        }
-
-        return new PageSlot(page, pageSize, container, placeholder, layoutParams, estimatedHeight);
-    }
-
-    private int estimatePageHeight(Size pageSize, RenderOptions options) {
-        if (pageSize == null || pageSize.getWidth() <= 0 || pageSize.getHeight() <= 0) {
-            return Math.max(1, options.minOutputHeight);
-        }
-        int proportionalHeight = Math.round(options.targetWidth * (pageSize.getHeight() / (float) pageSize.getWidth()));
-        return Math.max(options.minOutputHeight, proportionalHeight);
-    }
-
     private void scheduleVisibleRender() {
-        mainHandler.removeCallbacks(renderVisibleRunnable);
-        mainHandler.postDelayed(renderVisibleRunnable, 80);
-    }
-
-    private void renderVisiblePages() {
-        if (pageSlots.isEmpty() || executorService == null || currentOptions == null) {
-            return;
-        }
-
-        int viewportTop = getScrollY();
-        int viewportBottom = viewportTop + Math.max(1, getHeight());
-        int firstVisible = -1;
-        int lastVisible = -1;
-
-        for (int i = 0; i < pageSlots.size(); i++) {
-            FrameLayout container = pageSlots.get(i).container;
-            int top = container.getTop();
-            int bottom = container.getBottom();
-            if (bottom >= viewportTop && top <= viewportBottom) {
-                if (firstVisible < 0) {
-                    firstVisible = i;
-                }
-                lastVisible = i;
-            }
-        }
-
-        if (firstVisible < 0) {
-            firstVisible = 0;
-            lastVisible = 0;
-        }
-
-        visibleStart = Math.max(0, firstVisible);
-        visibleEnd = Math.max(visibleStart, lastVisible);
-
-        for (int page = visibleStart; page <= visibleEnd; page++) {
-            requestRenderPage(page);
-        }
-
-        int renderStart = Math.max(0, visibleStart - PAGE_PREFETCH_RADIUS);
-        int renderEnd = Math.min(pageSlots.size() - 1, visibleEnd + PAGE_PREFETCH_RADIUS);
-        for (int distance = 1; distance <= PAGE_PREFETCH_RADIUS; distance++) {
-            requestRenderPage(visibleStart - distance);
-            requestRenderPage(visibleEnd + distance);
-        }
-
-        recycleFarPages(renderStart, renderEnd);
-    }
-
-    private void requestRenderPage(int page) {
-        if (page < 0 || page >= pageSlots.size()) {
-            return;
-        }
-
-        PageSlot slot = pageSlots.get(page);
-        if (slot.bitmap != null || slot.renderRequested) {
-            return;
-        }
-
-        PdfiumCore core = pdfiumCore;
-        PdfDocument document = pdfDocument;
-        RenderOptions options = currentOptions;
-        Configurator configurator = currentConfigurator;
-        ExecutorService executor = executorService;
-        if (core == null || document == null || options == null || configurator == null || executor == null) {
-            return;
-        }
-
-        slot.renderRequested = true;
-        slot.failed = false;
-        slot.placeholder.setText("Reflowing page " + (page + 1) + "...");
-        int generation = loadGeneration;
-
-        try {
-            executor.execute(() -> renderPageIfNeeded(
-                    core,
-                    document,
-                    options,
-                    configurator,
-                    page,
-                    generation
-            ));
-        } catch (RejectedExecutionException ignored) {
-            slot.renderRequested = false;
-        }
-    }
-
-    private void renderPageIfNeeded(
-            PdfiumCore core,
-            PdfDocument document,
-            RenderOptions options,
-            Configurator configurator,
-            int page,
-            int generation
-    ) {
-        if (isCancelled(generation) || !isNearVisibleRange(page)) {
-            postRenderSkipped(generation, page);
-            return;
-        }
-
-        Bitmap pageBitmap = renderSourcePage(core, document, page, options, configurator.annotationRendering);
-        if (pageBitmap == null) {
-            postRenderFailed(generation, page);
-            return;
-        }
-
-        Bitmap reflowed;
-        try {
-            reflowed = processor.reflow(
-                    pageBitmap,
-                    options.targetWidth,
-                    options.minOutputHeight,
-                    options.targetTextHeightPx
-            );
-        } finally {
-            pageBitmap.recycle();
-        }
-
-        if (isCancelled(generation)) {
-            reflowed.recycle();
-            return;
-        }
-        postRenderedPage(generation, page, reflowed);
-    }
-
-    @Nullable
-    private Bitmap renderSourcePage(
-            PdfiumCore core,
-            PdfDocument document,
-            int page,
-            RenderOptions options,
-            boolean annotationRendering
-    ) {
-        try {
-            core.openPage(document, page);
-            Size pageSize = core.getPageSize(document, page);
-            if (pageSize.getWidth() <= 0 || pageSize.getHeight() <= 0) {
-                return null;
-            }
-
-            int renderWidth = chooseRenderWidth(pageSize, options);
-            int renderHeight = Math.max(1, Math.round(renderWidth * (pageSize.getHeight() / (float) pageSize.getWidth())));
-            Bitmap bitmap = Bitmap.createBitmap(renderWidth, renderHeight, Bitmap.Config.RGB_565);
-            bitmap.eraseColor(Color.WHITE);
-            core.renderPageBitmap(document, bitmap, page, 0, 0, renderWidth, renderHeight, annotationRendering);
-            return bitmap;
-        } catch (Throwable throwable) {
-            Log.w(TAG, "Unable to render page " + page + " for reflow", throwable);
-            return null;
-        }
-    }
-
-    private int chooseRenderWidth(Size pageSize, RenderOptions options) {
-        int requested = Math.max(options.targetWidth, Math.round(options.targetWidth * options.sourceScale));
-        int maxWidth = Math.max(options.targetWidth, options.maxSourceWidthPx);
-        requested = Math.min(requested, maxWidth);
-
-        while (requested > options.targetWidth) {
-            int requestedHeight = Math.max(1, Math.round(requested * (pageSize.getHeight() / (float) pageSize.getWidth())));
-            if ((long) requested * requestedHeight <= options.maxSourcePixels) {
-                break;
-            }
-            requested = Math.max(options.targetWidth, Math.round(requested * 0.9f));
-        }
-        return Math.max(1, requested);
-    }
-
-    private void postRenderedPage(int generation, int page, Bitmap bitmap) {
-        mainHandler.post(() -> {
-            if (generation != loadGeneration || page < 0 || page >= pageSlots.size()) {
-                bitmap.recycle();
-                return;
-            }
-            bindRenderedPage(pageSlots.get(page), bitmap);
-            recycleFarPages(
-                    Math.max(0, visibleStart - PAGE_PREFETCH_RADIUS),
-                    Math.min(pageSlots.size() - 1, visibleEnd + PAGE_PREFETCH_RADIUS)
-            );
-        });
-    }
-
-    private void bindRenderedPage(PageSlot slot, Bitmap bitmap) {
-        ScrollAnchor anchor = captureScrollAnchor();
-        if (slot.bitmap != null && !slot.bitmap.isRecycled()) {
-            slot.bitmap.recycle();
-        }
-        slot.renderRequested = false;
-        slot.failed = false;
-        slot.bitmap = bitmap;
-
-        if (slot.imageView == null) {
-            slot.imageView = new ImageView(getContext());
-            slot.imageView.setBackgroundColor(Color.WHITE);
-            slot.imageView.setScaleType(ImageView.ScaleType.FIT_XY);
-        }
-        slot.imageView.setImageBitmap(bitmap);
-
-        slot.container.removeAllViews();
-        slot.container.addView(slot.imageView, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-        ));
-        updateSlotHeight(slot, Math.max(1, bitmap.getHeight()));
-        restoreScrollAnchorAfterLayout(anchor);
-    }
-
-    private void postRenderSkipped(int generation, int page) {
-        mainHandler.post(() -> {
-            if (generation == loadGeneration && page >= 0 && page < pageSlots.size()) {
-                PageSlot slot = pageSlots.get(page);
-                slot.renderRequested = false;
-                if (slot.bitmap == null && !slot.failed) {
-                    slot.placeholder.setText("Page " + (page + 1));
-                }
-            }
-        });
-    }
-
-    private void postRenderFailed(int generation, int page) {
-        mainHandler.post(() -> {
-            if (generation == loadGeneration && page >= 0 && page < pageSlots.size()) {
-                PageSlot slot = pageSlots.get(page);
-                slot.renderRequested = false;
-                slot.failed = true;
-                slot.placeholder.setText("Unable to reflow page " + (page + 1));
-            }
-        });
-    }
-
-    private void recycleFarPages(int keepStart, int keepEnd) {
-        int renderedCount = 0;
-        int visibleCenter = (visibleStart + visibleEnd) / 2;
-
-        for (int i = 0; i < pageSlots.size(); i++) {
-            PageSlot slot = pageSlots.get(i);
-            if (slot.bitmap == null) {
-                continue;
-            }
-            if (i < keepStart || i > keepEnd) {
-                recycleSlotBitmap(slot);
-            } else {
-                renderedCount++;
-            }
-        }
-
-        while (renderedCount > MAX_RENDERED_PAGES) {
-            PageSlot farthest = null;
-            int farthestDistance = -1;
-            for (PageSlot slot : pageSlots) {
-                if (slot.bitmap == null || (slot.page >= visibleStart && slot.page <= visibleEnd)) {
-                    continue;
-                }
-                int distance = Math.abs(slot.page - visibleCenter);
-                if (distance > farthestDistance) {
-                    farthest = slot;
-                    farthestDistance = distance;
-                }
-            }
-            if (farthest == null) {
-                break;
-            }
-            recycleSlotBitmap(farthest);
-            renderedCount--;
+        if (renderCoordinator != null) {
+            renderCoordinator.scheduleVisibleRender();
         }
     }
 
     private void resetRenderedPagesForNewViewport() {
-        Configurator configurator = currentConfigurator;
-        if (configurator == null) {
+        ReflowLoadConfig loadConfig = currentConfig;
+        ReflowRenderCoordinator coordinator = renderCoordinator;
+        if (loadConfig == null || coordinator == null) {
             return;
         }
-
-        ScrollAnchor anchor = captureScrollAnchor();
-        loadGeneration++;
-        mainHandler.removeCallbacks(renderVisibleRunnable);
-
-        currentOptions = createRenderOptions(configurator);
-        for (PageSlot slot : pageSlots) {
-            slot.failed = false;
-            slot.estimatedHeight = estimatePageHeight(slot.pageSize, currentOptions);
-            slot.currentHeight = slot.estimatedHeight;
-            recycleSlotBitmap(slot);
-        }
-        restoreScrollAnchorAfterLayout(anchor);
-    }
-
-    private void recycleSlotBitmap(PageSlot slot) {
-        if (slot.bitmap != null && !slot.bitmap.isRecycled()) {
-            slot.bitmap.recycle();
-        }
-        slot.bitmap = null;
-        slot.renderRequested = false;
-        if (slot.imageView != null) {
-            slot.imageView.setImageDrawable(null);
-        }
-        slot.container.removeAllViews();
-        slot.placeholder.setText(slot.failed ? "Unable to reflow page " + (slot.page + 1) : "Page " + (slot.page + 1));
-        slot.container.addView(slot.placeholder, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-        ));
-        updateSlotHeight(slot, slot.currentHeight);
-    }
-
-    private void updateSlotHeight(PageSlot slot, int height) {
-        slot.currentHeight = Math.max(1, height);
-        slot.layoutParams.height = slot.currentHeight;
-        slot.container.setLayoutParams(slot.layoutParams);
-    }
-
-    @Nullable
-    private ScrollAnchor captureScrollAnchor() {
-        if (pageSlots.isEmpty()) {
-            return null;
-        }
-
-        int scrollY = getScrollY();
-        for (PageSlot slot : pageSlots) {
-            int top = slot.container.getTop();
-            int bottom = slot.container.getBottom();
-            if (bottom > scrollY) {
-                return new ScrollAnchor(slot.page, Math.max(0, scrollY - top), scrollY);
-            }
-        }
-
-        PageSlot lastSlot = pageSlots.get(pageSlots.size() - 1);
-        return new ScrollAnchor(
-                lastSlot.page,
-                Math.max(0, scrollY - lastSlot.container.getTop()),
-                scrollY
-        );
-    }
-
-    private void restoreScrollAnchorAfterLayout(@Nullable ScrollAnchor anchor) {
-        if (anchor == null) {
-            return;
-        }
-
-        pagesContainer.post(() -> {
-            if (anchor.page < 0 || anchor.page >= pageSlots.size()) {
-                return;
-            }
-            if (Math.abs(getScrollY() - anchor.scrollY) > dp(8)) {
-                return;
-            }
-
-            PageSlot slot = pageSlots.get(anchor.page);
-            int maxOffset = Math.max(0, slot.currentHeight - 1);
-            int targetScrollY = slot.container.getTop() + Math.min(anchor.offsetFromPageTop, maxOffset);
-            scrollTo(0, Math.max(0, targetScrollY));
-            scheduleVisibleRender();
-        });
-    }
-
-    private boolean isNearVisibleRange(int page) {
-        return page >= visibleStart - PAGE_PREFETCH_RADIUS && page <= visibleEnd + PAGE_PREFETCH_RADIUS;
-    }
-
-    private boolean isCancelled(int generation) {
-        return generation != loadGeneration || Thread.currentThread().isInterrupted();
+        coordinator.resetForViewport(createRenderOptions(loadConfig));
     }
 
     private int getPageWidth() {
         return Math.max(1, getWidth() - getPaddingLeft() - getPaddingRight());
     }
 
-    private void postError(Configurator configurator, int generation, Throwable throwable) {
+    private void postError(ReflowLoadConfig loadConfig, int generation, Throwable throwable) {
         mainHandler.post(() -> {
             if (generation != loadGeneration) {
                 return;
             }
             showStatus("Unable to reflow PDF");
-            if (configurator.onErrorListener != null) {
-                configurator.onErrorListener.onError(throwable);
+            if (loadConfig.onErrorListener != null) {
+                loadConfig.onErrorListener.onError(throwable);
             } else {
                 Log.e(TAG, "Unable to reflow PDF", throwable);
             }
@@ -715,51 +292,22 @@ public class PDFReflowView extends ScrollView {
 
     private void disposeCurrentLoad() {
         loadGeneration++;
-        mainHandler.removeCallbacks(renderVisibleRunnable);
 
-        ExecutorService executor = executorService;
-        PdfiumCore core = pdfiumCore;
-        PdfDocument document = pdfDocument;
-
-        executorService = null;
-        pdfiumCore = null;
-        pdfDocument = null;
-        currentOptions = null;
-        currentConfigurator = null;
-
-        for (PageSlot slot : pageSlots) {
-            if (slot.bitmap != null && !slot.bitmap.isRecycled()) {
-                slot.bitmap.recycle();
-            }
-            slot.bitmap = null;
-            slot.renderRequested = false;
+        if (renderCoordinator != null) {
+            renderCoordinator.dispose();
+            renderCoordinator = null;
         }
 
-        if (core != null && document != null) {
-            if (executor != null) {
-                try {
-                    executor.execute(() -> closeDocument(core, document));
-                } catch (RejectedExecutionException ignored) {
-                    closeDocumentInBackground(core, document);
-                }
-            } else {
-                closeDocumentInBackground(core, document);
-            }
-        }
-        if (executor != null) {
-            executor.shutdown();
-        }
-    }
+        ReflowDocumentSession session = documentSession;
+        documentSession = null;
+        currentConfig = null;
 
-    private void closeDocumentInBackground(PdfiumCore core, PdfDocument document) {
-        new Thread(() -> closeDocument(core, document), "PDF reflow close").start();
-    }
+        for (ReflowPageSlot slot : pageSlots) {
+            slot.releaseBitmap();
+        }
 
-    private void closeDocument(PdfiumCore core, PdfDocument document) {
-        try {
-            core.closeDocument(document);
-        } catch (Throwable throwable) {
-            Log.w(TAG, "Unable to close reflow document", throwable);
+        if (session != null) {
+            session.close();
         }
     }
 
@@ -867,98 +415,20 @@ public class PDFReflowView extends ScrollView {
             copy.maxSourcePixels = maxSourcePixels;
             return copy;
         }
-    }
 
-    private static final class RenderOptions {
-        final int targetWidth;
-        final int minOutputHeight;
-        final int pageSpacingPx;
-        final int targetTextHeightPx;
-        final float sourceScale;
-        final int maxSourceWidthPx;
-        final int maxSourcePixels;
-
-        private RenderOptions(
-                int targetWidth,
-                int minOutputHeight,
-                int pageSpacingPx,
-                int targetTextHeightPx,
-                float sourceScale,
-                int maxSourceWidthPx,
-                int maxSourcePixels
-        ) {
-            this.targetWidth = targetWidth;
-            this.minOutputHeight = minOutputHeight;
-            this.pageSpacingPx = pageSpacingPx;
-            this.targetTextHeightPx = targetTextHeightPx;
-            this.sourceScale = sourceScale;
-            this.maxSourceWidthPx = maxSourceWidthPx;
-            this.maxSourcePixels = maxSourcePixels;
-        }
-
-        static RenderOptions from(
-                Configurator configurator,
-                int targetWidth,
-                int minOutputHeight,
-                int spacingPx,
-                int targetTextHeightPx
-        ) {
-            return new RenderOptions(
-                    targetWidth,
-                    minOutputHeight,
-                    spacingPx,
-                    targetTextHeightPx,
-                    configurator.sourceScale,
-                    configurator.maxSourceWidthPx,
-                    configurator.maxSourcePixels
+        private ReflowLoadConfig toLoadConfig() {
+            return new ReflowLoadConfig(
+                    documentSource,
+                    password,
+                    onLoadCompleteListener,
+                    onErrorListener,
+                    annotationRendering,
+                    pageSpacingDp,
+                    textSizeDp,
+                    sourceScale,
+                    maxSourceWidthPx,
+                    maxSourcePixels
             );
-        }
-    }
-
-    private static final class PageSlot {
-        final int page;
-        final Size pageSize;
-        final FrameLayout container;
-        final TextView placeholder;
-        final LinearLayout.LayoutParams layoutParams;
-        int estimatedHeight;
-        int currentHeight;
-
-        @Nullable
-        ImageView imageView;
-        @Nullable
-        Bitmap bitmap;
-
-        boolean renderRequested;
-        boolean failed;
-
-        PageSlot(
-                int page,
-                Size pageSize,
-                FrameLayout container,
-                TextView placeholder,
-                LinearLayout.LayoutParams layoutParams,
-                int estimatedHeight
-        ) {
-            this.page = page;
-            this.pageSize = pageSize;
-            this.container = container;
-            this.placeholder = placeholder;
-            this.layoutParams = layoutParams;
-            this.estimatedHeight = estimatedHeight;
-            this.currentHeight = estimatedHeight;
-        }
-    }
-
-    private static final class ScrollAnchor {
-        final int page;
-        final int offsetFromPageTop;
-        final int scrollY;
-
-        ScrollAnchor(int page, int offsetFromPageTop, int scrollY) {
-            this.page = page;
-            this.offsetFromPageTop = offsetFromPageTop;
-            this.scrollY = scrollY;
         }
     }
 }
