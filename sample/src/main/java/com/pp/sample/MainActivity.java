@@ -48,6 +48,10 @@ import java.util.concurrent.Executors;
 public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "MainActivity";
+    private static final float DEFAULT_REFLOW_TEXT_SIZE_DP = 15f;
+    private static final float MIN_REFLOW_TEXT_SIZE_DP = 12f;
+    private static final float MAX_REFLOW_TEXT_SIZE_DP = 28f;
+    private static final float REFLOW_TEXT_SIZE_STEP_DP = 1f;
     private ActivityMainBinding binding;
 
     private static final long DEBOUNCE_DELAY_MS = 500; // Delay in milliseconds
@@ -67,6 +71,11 @@ public class MainActivity extends AppCompatActivity {
     private MenuItem searchMenuItem;
 
     private BottomSheetBehavior<View> bottomSheetBehavior;
+
+    private Uri currentPdfUri;
+    private boolean reflowMode;
+    private boolean reflowLoaded;
+    private float currentReflowTextSizeDp = DEFAULT_REFLOW_TEXT_SIZE_DP;
 
 
     @Override
@@ -138,8 +147,12 @@ public class MainActivity extends AppCompatActivity {
 
         binding.closeSearchBtn.setOnClickListener(v -> resetAndCloseSearchView());
         binding.openFile.setOnClickListener(v -> launcher.launch("application/pdf"));
+        binding.reflowToggle.setOnClickListener(v -> setReflowMode(!reflowMode));
+        binding.reflowTextDecrease.setOnClickListener(v -> changeReflowTextSize(-REFLOW_TEXT_SIZE_STEP_DP));
+        binding.reflowTextIncrease.setOnClickListener(v -> changeReflowTextSize(REFLOW_TEXT_SIZE_STEP_DP));
         binding.closeTableOfContent.setOnClickListener(v ->
                 bottomSheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN));
+        updateReflowModeViews();
     }
 
 
@@ -246,6 +259,9 @@ public class MainActivity extends AppCompatActivity {
     private boolean mVisible = true;
 
     private void loadPdf(Uri uri) {
+        currentPdfUri = uri;
+        reflowLoaded = false;
+        binding.reflowView.recycle();
         hidePopupMenu();
         if (this.binding.pdfView.getHasSelection()) {
             this.binding.pdfView.clearSelection();
@@ -293,6 +309,75 @@ public class MainActivity extends AppCompatActivity {
                     return true;
                 });
         configurator.load();
+        if (reflowMode) {
+            loadReflowPdf();
+        }
+        updateReflowModeViews();
+    }
+
+    private void setReflowMode(boolean enabled) {
+        reflowMode = enabled;
+        hidePopupMenu();
+        if (bottomSheetBehavior != null) {
+            bottomSheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
+        }
+        if (binding.pdfView.getHasSelection()) {
+            binding.pdfView.clearSelection();
+        }
+        resetAndCloseSearchView();
+        hideSearchNavigation();
+
+        if (reflowMode && !reflowLoaded) {
+            loadReflowPdf();
+        }
+        updateReflowModeViews();
+    }
+
+    private void updateReflowModeViews() {
+        binding.reflowView.setVisibility(reflowMode ? View.VISIBLE : View.GONE);
+        binding.pdfView.setVisibility(reflowMode ? View.GONE : View.VISIBLE);
+        binding.docSelection.setVisibility(reflowMode ? View.GONE : View.VISIBLE);
+        binding.reflowTextControls.setVisibility(reflowMode ? View.VISIBLE : View.GONE);
+        binding.reflowToggle.setText(reflowMode ? R.string.original_mode : R.string.reflow_mode);
+        binding.reflowTextSizeLabel.setText(getString(
+                R.string.reflow_text_size_label,
+                Math.round(currentReflowTextSizeDp)
+        ));
+        binding.reflowTextDecrease.setEnabled(currentReflowTextSizeDp > MIN_REFLOW_TEXT_SIZE_DP);
+        binding.reflowTextIncrease.setEnabled(currentReflowTextSizeDp < MAX_REFLOW_TEXT_SIZE_DP);
+    }
+
+    private void loadReflowPdf() {
+        if (currentPdfUri == null) {
+            binding.reflowView.fromAsset("sample.pdf")
+                    .textSizeDp(currentReflowTextSizeDp)
+                    .onError(throwable -> Log.e(TAG, "Unable to reflow asset PDF", throwable))
+                    .load();
+        } else {
+            binding.reflowView.fromUri(currentPdfUri)
+                    .textSizeDp(currentReflowTextSizeDp)
+                    .onError(throwable -> Log.e(TAG, "Unable to reflow selected PDF", throwable))
+                    .load();
+        }
+        reflowLoaded = true;
+    }
+
+    private void changeReflowTextSize(float deltaDp) {
+        float nextSize = Math.max(
+                MIN_REFLOW_TEXT_SIZE_DP,
+                Math.min(MAX_REFLOW_TEXT_SIZE_DP, currentReflowTextSizeDp + deltaDp)
+        );
+        if (nextSize == currentReflowTextSizeDp) {
+            return;
+        }
+
+        currentReflowTextSizeDp = nextSize;
+        if (reflowMode) {
+            reflowLoaded = false;
+            binding.reflowView.recycle();
+            loadReflowPdf();
+        }
+        updateReflowModeViews();
     }
 
     private void highlightArea() {
@@ -331,6 +416,9 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
+        if (binding != null) {
+            binding.reflowView.recycle();
+        }
         binding = null;
         menuBinding = null;
         SearchResultsCacheManager

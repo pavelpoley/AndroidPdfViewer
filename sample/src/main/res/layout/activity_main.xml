@@ -27,6 +27,15 @@
             app:layout_constraintBottom_toTopOf="@id/searchResultNavigationLayout"
             app:layout_constraintTop_toBottomOf="@id/main_toolbar" />
 
+        <com.github.barteksc.pdfviewer.PDFReflowView
+            android:id="@+id/reflowView"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:visibility="gone"
+            app:layout_constraintBottom_toTopOf="@id/searchResultNavigationLayout"
+            app:layout_constraintTop_toBottomOf="@id/main_toolbar"
+            tools:visibility="visible" />
+
         <com.github.barteksc.pdfviewer.PDocSelection
             android:id="@+id/docSelection"
             android:layout_width="0dp"
@@ -100,6 +109,53 @@
             android:src="@drawable/baseline_picture_as_pdf_24"
             app:layout_constraintBottom_toTopOf="@id/searchResultNavigationLayout"
             app:layout_constraintEnd_toEndOf="parent" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/reflowToggle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_margin="16dp"
+            android:text="@string/reflow_mode"
+            app:layout_constraintBottom_toTopOf="@id/searchResultNavigationLayout"
+            app:layout_constraintStart_toStartOf="parent" />
+
+        <LinearLayout
+            android:id="@+id/reflowTextControls"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:visibility="gone"
+            app:layout_constraintBottom_toBottomOf="@id/reflowToggle"
+            app:layout_constraintStart_toEndOf="@id/reflowToggle"
+            tools:visibility="visible">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/reflowTextDecrease"
+                android:layout_width="48dp"
+                android:layout_height="wrap_content"
+                android:contentDescription="@string/reflow_text_decrease"
+                android:minWidth="0dp"
+                android:text="@string/reflow_text_decrease" />
+
+            <TextView
+                android:id="@+id/reflowTextSizeLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="8dp"
+                android:text="@string/reflow_text_size_default"
+                android:textColor="?attr/colorOnBackground"
+                android:textSize="14sp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/reflowTextIncrease"
+                android:layout_width="48dp"
+                android:layout_height="wrap_content"
+                android:contentDescription="@string/reflow_text_increase"
+                android:minWidth="0dp"
+                android:text="@string/reflow_text_increase" />
+        </LinearLayout>
     </androidx.constraintlayout.widget.ConstraintLayout>
     <!-- Persistent BottomSheet -->
     <LinearLayout
