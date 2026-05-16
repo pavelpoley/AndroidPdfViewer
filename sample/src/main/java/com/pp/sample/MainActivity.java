@@ -92,6 +92,13 @@ public class MainActivity extends AppCompatActivity {
         });
 
         PDFView pdfView = binding.pdfView;
+        binding.reflowView.setTextSizeRangeDp(MIN_REFLOW_TEXT_SIZE_DP, MAX_REFLOW_TEXT_SIZE_DP);
+        binding.reflowView.setTextSizeDp(currentReflowTextSizeDp);
+        binding.reflowView.setReflowZoomEnabled(true);
+        binding.reflowView.setOnTextSizeChangedListener(textSizeDp -> {
+            currentReflowTextSizeDp = textSizeDp;
+            updateReflowModeViews();
+        });
         loadPdf(null);
         bottomSheetBehavior = BottomSheetBehavior.from(binding.persistentBottomSheet);
         bottomSheetBehavior.setMaxHeight((int) (getResources().getDisplayMetrics().heightPixels * .5f));
@@ -347,7 +354,7 @@ public class MainActivity extends AppCompatActivity {
         binding.reflowView.setVisibility(reflowMode ? View.VISIBLE : View.GONE);
         binding.pdfView.setVisibility(reflowMode ? View.GONE : View.VISIBLE);
         binding.docSelection.setVisibility(reflowMode ? View.GONE : View.VISIBLE);
-        binding.reflowTextControls.setVisibility(reflowMode ? View.VISIBLE : View.GONE);
+        binding.reflowTextControls.setVisibility(View.GONE);
         binding.reflowToggle.setText(reflowMode ? R.string.original_mode : R.string.reflow_mode);
         binding.reflowTextSizeLabel.setText(getString(
                 R.string.reflow_text_size_label,

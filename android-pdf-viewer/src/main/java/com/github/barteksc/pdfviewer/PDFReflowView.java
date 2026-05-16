@@ -8,6 +8,8 @@ import android.os.Looper;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.Gravity;
+import android.view.MotionEvent;
+import android.view.ScaleGestureDetector;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
 import android.widget.LinearLayout;
@@ -44,6 +46,9 @@ public class PDFReflowView extends ScrollView {
     private static final float DEFAULT_TEXT_SIZE_DP = 15f;
     private static final int DEFAULT_MAX_SOURCE_WIDTH = 2200;
     private static final int DEFAULT_MAX_SOURCE_PIXELS = 3_200_000;
+    private static final float DEFAULT_MIN_TEXT_SIZE_DP = 12f;
+    private static final float DEFAULT_MAX_TEXT_SIZE_DP = 28f;
+    private static final float MIN_TEXT_SIZE_COMMIT_DELTA_DP = 0.1f;
     private static final long MIN_REFLOW_CACHE_BYTES = 16L * 1024L * 1024L;
     private static final long MAX_REFLOW_CACHE_BYTES = 48L * 1024L * 1024L;
     private static final int NO_PENDING_JUMP_PAGE = -1;
@@ -51,6 +56,7 @@ public class PDFReflowView extends ScrollView {
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final LinearLayout pagesContainer;
     private final List<ReflowPageSlot> pageSlots = new ArrayList<>();
+    private final ScaleGestureDetector scaleGestureDetector;
 
     @Nullable
     private Configurator waitingDocumentConfigurator;
@@ -64,9 +70,22 @@ public class PDFReflowView extends ScrollView {
     private ReflowLoadConfig currentConfig;
     @Nullable
     private ViewTreeObserver.OnPreDrawListener pendingJumpPreDrawListener;
+    @Nullable
+    private Configurator loadedDocumentConfigurator;
+    @Nullable
+    private OnTextSizeChangedListener onTextSizeChangedListener;
 
     private int pendingJumpPage = NO_PENDING_JUMP_PAGE;
     private boolean pendingJumpSmooth;
+    private boolean reflowZoomEnabled;
+    private boolean reflowScaling;
+    private boolean multiTouchActive;
+    private float minTextSizeDp = DEFAULT_MIN_TEXT_SIZE_DP;
+    private float maxTextSizeDp = DEFAULT_MAX_TEXT_SIZE_DP;
+    private float currentTextSizeDp = DEFAULT_TEXT_SIZE_DP;
+    private float gestureStartTextSizeDp = DEFAULT_TEXT_SIZE_DP;
+    private float gestureScale = 1f;
+    private int gestureStartPage;
     private volatile int loadGeneration = 0;
 
     public PDFReflowView(Context context) {
@@ -79,6 +98,7 @@ public class PDFReflowView extends ScrollView {
 
     public PDFReflowView(Context context, AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
+        scaleGestureDetector = new ScaleGestureDetector(context, new ReflowScaleListener());
         setFillViewport(true);
         setBackgroundColor(Color.WHITE);
         pagesContainer = new LinearLayout(context);
@@ -106,7 +126,31 @@ public class PDFReflowView extends ScrollView {
     @Override
     protected void onScrollChanged(int l, int t, int oldl, int oldt) {
         super.onScrollChanged(l, t, oldl, oldt);
-        scheduleVisibleRender();
+        if (!reflowScaling) {
+            scheduleVisibleRender();
+        }
+    }
+
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent event) {
+        if (reflowZoomEnabled && currentConfig != null) {
+            int action = event.getActionMasked();
+            scaleGestureDetector.onTouchEvent(event);
+            if (event.getPointerCount() > 1 || action == MotionEvent.ACTION_POINTER_DOWN) {
+                multiTouchActive = true;
+                requestParentDisallowIntercept(true);
+            }
+
+            if (multiTouchActive || reflowScaling) {
+                if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+                    finishTemporaryReflowScale();
+                    multiTouchActive = false;
+                    requestParentDisallowIntercept(false);
+                }
+                return true;
+            }
+        }
+        return super.dispatchTouchEvent(event);
     }
 
     @Override
@@ -117,8 +161,10 @@ public class PDFReflowView extends ScrollView {
 
     public void recycle() {
         waitingDocumentConfigurator = null;
+        loadedDocumentConfigurator = null;
         pendingJumpPage = NO_PENDING_JUMP_PAGE;
         clearPendingJumpRetry();
+        resetTemporaryReflowScale();
         disposeCurrentLoad();
         pagesContainer.removeAllViews();
         pageSlots.clear();
@@ -190,20 +236,54 @@ public class PDFReflowView extends ScrollView {
         scheduleVisibleRender();
     }
 
+    public void setReflowZoomEnabled(boolean enabled) {
+        reflowZoomEnabled = enabled;
+        if (!enabled) {
+            multiTouchActive = false;
+            finishTemporaryReflowScale();
+        }
+    }
+
+    public void setTextSizeRangeDp(float minTextSizeDp, float maxTextSizeDp) {
+        if (minTextSizeDp <= 0f || maxTextSizeDp <= 0f || minTextSizeDp > maxTextSizeDp) {
+            return;
+        }
+        this.minTextSizeDp = minTextSizeDp;
+        this.maxTextSizeDp = maxTextSizeDp;
+        setTextSizeDp(currentTextSizeDp);
+    }
+
+    public void setTextSizeDp(float textSizeDp) {
+        commitTextSizeDp(clampTextSize(textSizeDp), getCurrentPage());
+    }
+
+    public float getTextSizeDp() {
+        return currentTextSizeDp;
+    }
+
+    public void setOnTextSizeChangedListener(@Nullable OnTextSizeChangedListener listener) {
+        onTextSizeChangedListener = listener;
+    }
+
     private void load(@NonNull Configurator configurator) {
+        Configurator loadConfigurator = configurator.copy();
+        loadConfigurator.textSizeDp = clampTextSize(loadConfigurator.textSizeDp);
+        currentTextSizeDp = loadConfigurator.textSizeDp;
         if (getWidth() == 0) {
-            waitingDocumentConfigurator = configurator.copy();
+            waitingDocumentConfigurator = loadConfigurator.copy();
+            loadedDocumentConfigurator = loadConfigurator.copy();
             return;
         }
 
         clearPendingJumpRetry();
         disposeCurrentLoad();
+        loadedDocumentConfigurator = loadConfigurator.copy();
         pagesContainer.removeAllViews();
         pageSlots.clear();
         scrollTo(0, 0);
 
         int generation = ++loadGeneration;
-        ReflowLoadConfig loadConfig = configurator.toLoadConfig();
+        ReflowLoadConfig loadConfig = loadConfigurator.toLoadConfig();
         ReflowRenderOptions options = createRenderOptions(loadConfig);
 
         showStatus("Opening PDF...");
@@ -310,8 +390,99 @@ public class PDFReflowView extends ScrollView {
         coordinator.resetForViewport(createRenderOptions(loadConfig));
     }
 
+    private void reloadCurrentDocumentAtTextSize(int page) {
+        Configurator configurator = loadedDocumentConfigurator;
+        if (configurator == null) {
+            return;
+        }
+        Configurator reloadConfigurator = configurator.copy();
+        reloadConfigurator.textSizeDp = currentTextSizeDp;
+        load(reloadConfigurator);
+        jumpTo(page);
+    }
+
     private int getPageWidth() {
         return Math.max(1, getWidth() - getPaddingLeft() - getPaddingRight());
+    }
+
+    private void requestParentDisallowIntercept(boolean disallowIntercept) {
+        if (getParent() != null) {
+            getParent().requestDisallowInterceptTouchEvent(disallowIntercept);
+        }
+    }
+
+    private void beginTemporaryReflowScale(ScaleGestureDetector detector) {
+        if (pageSlots.isEmpty()) {
+            return;
+        }
+        reflowScaling = true;
+        gestureScale = 1f;
+        gestureStartTextSizeDp = currentTextSizeDp;
+        gestureStartPage = getCurrentPage();
+        setBackgroundColor(Color.BLACK);
+        updateTemporaryReflowScalePivot(detector);
+    }
+
+    private void updateTemporaryReflowScale(ScaleGestureDetector detector) {
+        updateTemporaryReflowScalePivot(detector);
+        float minScale = minTextSizeDp / Math.max(0.1f, gestureStartTextSizeDp);
+        float maxScale = maxTextSizeDp / Math.max(0.1f, gestureStartTextSizeDp);
+        gestureScale = clamp(gestureScale * detector.getScaleFactor(), minScale, maxScale);
+        pagesContainer.setScaleX(gestureScale);
+        pagesContainer.setScaleY(gestureScale);
+    }
+
+    private void updateTemporaryReflowScalePivot(ScaleGestureDetector detector) {
+        pagesContainer.setPivotX(detector.getFocusX() + getScrollX() - pagesContainer.getLeft());
+        pagesContainer.setPivotY(detector.getFocusY() + getScrollY() - pagesContainer.getTop());
+    }
+
+    private void finishTemporaryReflowScale() {
+        if (!reflowScaling) {
+            return;
+        }
+        reflowScaling = false;
+        float committedTextSizeDp = clampTextSize(gestureStartTextSizeDp * gestureScale);
+        int targetPage = gestureStartPage;
+        resetTemporaryReflowScale();
+
+        if (Math.abs(committedTextSizeDp - currentTextSizeDp) < MIN_TEXT_SIZE_COMMIT_DELTA_DP) {
+            jumpTo(targetPage);
+            return;
+        }
+        commitTextSizeDp(committedTextSizeDp, targetPage);
+    }
+
+    private void resetTemporaryReflowScale() {
+        reflowScaling = false;
+        gestureScale = 1f;
+        pagesContainer.setScaleX(1f);
+        pagesContainer.setScaleY(1f);
+        pagesContainer.setPivotX(0f);
+        pagesContainer.setPivotY(0f);
+        setBackgroundColor(Color.WHITE);
+    }
+
+    private void commitTextSizeDp(float textSizeDp, int targetPage) {
+        float nextTextSizeDp = clampTextSize(textSizeDp);
+        if (Math.abs(nextTextSizeDp - currentTextSizeDp) < MIN_TEXT_SIZE_COMMIT_DELTA_DP) {
+            return;
+        }
+        currentTextSizeDp = nextTextSizeDp;
+        if (loadedDocumentConfigurator != null) {
+            reloadCurrentDocumentAtTextSize(targetPage);
+        }
+        if (onTextSizeChangedListener != null) {
+            onTextSizeChangedListener.onTextSizeChanged(currentTextSizeDp);
+        }
+    }
+
+    private float clampTextSize(float textSizeDp) {
+        return clamp(textSizeDp, minTextSizeDp, maxTextSizeDp);
+    }
+
+    private static float clamp(float value, float min, float max) {
+        return Math.max(min, Math.min(max, value));
     }
 
     private int clampPage(int page) {
@@ -443,6 +614,32 @@ public class PDFReflowView extends ScrollView {
 
     public interface OnErrorListener {
         void onError(Throwable throwable);
+    }
+
+    public interface OnTextSizeChangedListener {
+        void onTextSizeChanged(float textSizeDp);
+    }
+
+    private class ReflowScaleListener extends ScaleGestureDetector.SimpleOnScaleGestureListener {
+        @Override
+        public boolean onScaleBegin(ScaleGestureDetector detector) {
+            beginTemporaryReflowScale(detector);
+            return reflowScaling;
+        }
+
+        @Override
+        public boolean onScale(ScaleGestureDetector detector) {
+            if (!reflowScaling) {
+                return false;
+            }
+            updateTemporaryReflowScale(detector);
+            return true;
+        }
+
+        @Override
+        public void onScaleEnd(ScaleGestureDetector detector) {
+            finishTemporaryReflowScale();
+        }
     }
 
     public class Configurator {
