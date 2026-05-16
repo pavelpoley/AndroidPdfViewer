@@ -5,11 +5,11 @@ plugins {
 android {
     namespace 'com.github.barteksc.pdfviewer'
 
-    compileSdk 35
+    compileSdk 36
 
     defaultConfig {
         minSdkVersion 25
-        targetSdkVersion 35
+        targetSdkVersion 36
     }
     buildTypes {
         release {
