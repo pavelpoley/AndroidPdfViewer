@@ -22,6 +22,8 @@ import java.util.concurrent.RejectedExecutionException;
 final class ReflowDocumentSession {
     private static final String TAG = ReflowDocumentSession.class.getSimpleName();
     private static final boolean TRACE_REFLOW_TIMING = false;
+    private static final Bitmap.Config REFLOW_SOURCE_CONFIG = Bitmap.Config.ARGB_8888;
+    private static final Bitmap.Config REFLOW_SOURCE_FALLBACK_CONFIG = Bitmap.Config.RGB_565;
 
     private final Object lock = new Object();
     private final Context appContext;
@@ -220,13 +222,21 @@ final class ReflowDocumentSession {
 
             int renderWidth = chooseRenderWidth(pageSize, options);
             int renderHeight = Math.max(1, Math.round(renderWidth * (pageSize.getHeight() / (float) pageSize.getWidth())));
-            Bitmap bitmap = Bitmap.createBitmap(renderWidth, renderHeight, Bitmap.Config.RGB_565);
+            Bitmap bitmap = createSourceBitmap(renderWidth, renderHeight);
             bitmap.eraseColor(Color.WHITE);
             core.renderPageBitmap(document, bitmap, page, 0, 0, renderWidth, renderHeight, annotationRendering);
             return bitmap;
         } catch (Throwable throwable) {
             Log.w(TAG, "Unable to render page " + page + " for reflow", throwable);
             return null;
+        }
+    }
+
+    private Bitmap createSourceBitmap(int width, int height) {
+        try {
+            return Bitmap.createBitmap(width, height, REFLOW_SOURCE_CONFIG);
+        } catch (OutOfMemoryError ignored) {
+            return Bitmap.createBitmap(width, height, REFLOW_SOURCE_FALLBACK_CONFIG);
         }
     }
 

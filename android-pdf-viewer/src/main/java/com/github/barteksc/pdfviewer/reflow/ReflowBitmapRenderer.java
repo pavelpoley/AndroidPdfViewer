@@ -16,7 +16,8 @@ import java.util.List;
 final class ReflowBitmapRenderer {
     private static final int BACKGROUND_COLOR = Color.WHITE;
 
-    private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+    private final Paint filteredPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG | Paint.DITHER_FLAG);
+    private final Paint sharpPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
 
     ReflowBitmapProcessor.Result renderTiles(Bitmap source, ReflowLayout layout, int targetWidth, int tileHeight) {
         return renderTiles(source, layout, targetWidth, tileHeight, null);
@@ -29,6 +30,17 @@ final class ReflowBitmapRenderer {
             int tileHeight,
             @Nullable CancellationSignal cancellationSignal
     ) {
+        return renderTiles(source, layout, targetWidth, tileHeight, Bitmap.Config.RGB_565, cancellationSignal);
+    }
+
+    ReflowBitmapProcessor.Result renderTiles(
+            Bitmap source,
+            ReflowLayout layout,
+            int targetWidth,
+            int tileHeight,
+            Bitmap.Config bitmapConfig,
+            @Nullable CancellationSignal cancellationSignal
+    ) {
         List<Bitmap> tiles = new ArrayList<>();
         try {
             int totalHeight = Math.max(1, layout.outputHeight);
@@ -36,7 +48,7 @@ final class ReflowBitmapRenderer {
             for (int tileTop = 0; tileTop < totalHeight; tileTop += safeTileHeight) {
                 ReflowPixelMap.throwIfCanceledSignal(cancellationSignal);
                 int currentTileHeight = Math.min(safeTileHeight, totalHeight - tileTop);
-                Bitmap tile = Bitmap.createBitmap(targetWidth, currentTileHeight, Bitmap.Config.RGB_565);
+                Bitmap tile = createTileBitmap(targetWidth, currentTileHeight, bitmapConfig);
                 boolean added = false;
                 try {
                     Canvas canvas = new Canvas(tile);
@@ -68,6 +80,17 @@ final class ReflowBitmapRenderer {
             int tileHeight,
             @Nullable CancellationSignal cancellationSignal
     ) {
+        return scaleToWidthTiles(source, targetWidth, minOutputHeight, tileHeight, Bitmap.Config.RGB_565, cancellationSignal);
+    }
+
+    ReflowBitmapProcessor.Result scaleToWidthTiles(
+            Bitmap source,
+            int targetWidth,
+            int minOutputHeight,
+            int tileHeight,
+            Bitmap.Config bitmapConfig,
+            @Nullable CancellationSignal cancellationSignal
+    ) {
         int totalHeight = Math.max(1, Math.round(source.getHeight() * (targetWidth / (float) source.getWidth())));
         totalHeight = Math.max(totalHeight, minOutputHeight);
         int safeTileHeight = Math.max(1, tileHeight);
@@ -76,13 +99,14 @@ final class ReflowBitmapRenderer {
             for (int tileTop = 0; tileTop < totalHeight; tileTop += safeTileHeight) {
                 ReflowPixelMap.throwIfCanceledSignal(cancellationSignal);
                 int currentTileHeight = Math.min(safeTileHeight, totalHeight - tileTop);
-                Bitmap tile = Bitmap.createBitmap(targetWidth, currentTileHeight, Bitmap.Config.RGB_565);
+                Bitmap tile = createTileBitmap(targetWidth, currentTileHeight, bitmapConfig);
                 boolean added = false;
                 try {
                     Canvas canvas = new Canvas(tile);
                     canvas.drawColor(BACKGROUND_COLOR);
                     Rect sourceRect = scaledSourceRect(source, totalHeight, tileTop, currentTileHeight);
-                    canvas.drawBitmap(source, sourceRect, new Rect(0, 0, targetWidth, currentTileHeight), paint);
+                    Rect destination = new Rect(0, 0, targetWidth, currentTileHeight);
+                    canvas.drawBitmap(source, sourceRect, destination, choosePaint(sourceRect, destination));
                     tiles.add(tile);
                     added = true;
                 } finally {
@@ -128,8 +152,25 @@ final class ReflowBitmapRenderer {
             }
             Rect clippedSource = clippedSourceRect(placedWord.source, destination, clippedDestination);
             clippedDestination.offset(0, -tileTop);
-            canvas.drawBitmap(source, clippedSource, clippedDestination, paint);
+            canvas.drawBitmap(source, clippedSource, clippedDestination, choosePaint(placedWord.source, destination));
         }
+    }
+
+    private Bitmap createTileBitmap(int width, int height, Bitmap.Config preferredConfig) {
+        Bitmap.Config safeConfig = preferredConfig != null ? preferredConfig : Bitmap.Config.RGB_565;
+        try {
+            return Bitmap.createBitmap(width, height, safeConfig);
+        } catch (OutOfMemoryError error) {
+            if (safeConfig == Bitmap.Config.RGB_565) {
+                throw error;
+            }
+            return Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565);
+        }
+    }
+
+    private Paint choosePaint(Rect source, Rect destination) {
+        boolean upscaling = destination.width() > source.width() || destination.height() > source.height();
+        return upscaling ? sharpPaint : filteredPaint;
     }
 
     private Rect scaledSourceRect(Bitmap source, int totalHeight, int tileTop, int tileHeight) {

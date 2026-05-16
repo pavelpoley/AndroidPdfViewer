@@ -23,6 +23,7 @@ public class ReflowBitmapProcessor {
     private static final int SMALL_TILE_HEIGHT = 2048;
     private static final int LARGE_TILE_HEIGHT = 4096;
     private static final int RGB_565_BYTES_PER_PIXEL = 2;
+    private static final int ARGB_8888_BYTES_PER_PIXEL = 4;
     private static final long MIN_REFLOW_CACHE_BYTES = 16L * 1024L * 1024L;
     private static final long MAX_REFLOW_CACHE_BYTES = 48L * 1024L * 1024L;
 
@@ -46,7 +47,11 @@ public class ReflowBitmapProcessor {
         if (result.tiles.size() == 1) {
             return result.tiles.get(0);
         }
-        Bitmap output = Bitmap.createBitmap(targetWidth, Math.max(1, result.totalHeight), Bitmap.Config.RGB_565);
+        Bitmap.Config outputConfig = result.tiles.get(0).getConfig();
+        if (outputConfig == null) {
+            outputConfig = Bitmap.Config.RGB_565;
+        }
+        Bitmap output = Bitmap.createBitmap(targetWidth, Math.max(1, result.totalHeight), outputConfig);
         Canvas canvas = new Canvas(output);
         int y = 0;
         for (Bitmap tile : result.tiles) {
@@ -77,7 +82,7 @@ public class ReflowBitmapProcessor {
         }
 
         long totalStart = traceStart();
-        int tileHeight = chooseTileHeight(targetWidth);
+        TileOptions tileOptions = chooseTileOptions(targetWidth);
         ReflowPixelMap.throwIfCanceledSignal(cancellationSignal);
         long stageStart = traceStart();
         ReflowPixelMap pixels = new ReflowPixelMap(source, cancellationSignal);
@@ -93,7 +98,8 @@ public class ReflowBitmapProcessor {
                     source,
                     targetWidth,
                     Math.max(1, minOutputHeight),
-                    tileHeight,
+                    tileOptions.height,
+                    tileOptions.config,
                     cancellationSignal
             );
             traceTiming("fallback render tiles", stageStart);
@@ -111,7 +117,8 @@ public class ReflowBitmapProcessor {
                     source,
                     targetWidth,
                     Math.max(1, minOutputHeight),
-                    tileHeight,
+                    tileOptions.height,
+                    tileOptions.config,
                     cancellationSignal
             );
             traceTiming("fallback render tiles", stageStart);
@@ -125,21 +132,41 @@ public class ReflowBitmapProcessor {
         traceTiming("layout", stageStart);
         ReflowPixelMap.throwIfCanceledSignal(cancellationSignal);
         stageStart = traceStart();
-        Result result = renderer.renderTiles(source, layout, targetWidth, tileHeight, cancellationSignal);
+        Result result = renderer.renderTiles(
+                source,
+                layout,
+                targetWidth,
+                tileOptions.height,
+                tileOptions.config,
+                cancellationSignal
+        );
         traceTiming("render tiles", stageStart);
         traceTiming("total reflow", totalStart);
         return result;
     }
 
-    private static int chooseTileHeight(int targetWidth) {
-        long cacheBudget = calculateDefaultCacheBudgetBytes();
-        long largeTileBytes = (long) Math.max(1, targetWidth) * LARGE_TILE_HEIGHT * RGB_565_BYTES_PER_PIXEL;
-        return largeTileBytes <= cacheBudget / 3L ? LARGE_TILE_HEIGHT : SMALL_TILE_HEIGHT;
+    private static TileOptions chooseTileOptions(int targetWidth) {
+        long perTileBudget = Math.max(1L, calculateDefaultCacheBudgetBytes() / 3L);
+        if (estimateTileBytes(targetWidth, LARGE_TILE_HEIGHT, Bitmap.Config.ARGB_8888) <= perTileBudget) {
+            return new TileOptions(LARGE_TILE_HEIGHT, Bitmap.Config.ARGB_8888);
+        }
+        if (estimateTileBytes(targetWidth, SMALL_TILE_HEIGHT, Bitmap.Config.ARGB_8888) <= perTileBudget) {
+            return new TileOptions(SMALL_TILE_HEIGHT, Bitmap.Config.ARGB_8888);
+        }
+        if (estimateTileBytes(targetWidth, LARGE_TILE_HEIGHT, Bitmap.Config.RGB_565) <= perTileBudget) {
+            return new TileOptions(LARGE_TILE_HEIGHT, Bitmap.Config.RGB_565);
+        }
+        return new TileOptions(SMALL_TILE_HEIGHT, Bitmap.Config.RGB_565);
     }
 
     private static long calculateDefaultCacheBudgetBytes() {
         long runtimeBudget = Runtime.getRuntime().maxMemory() / 8L;
         return Math.max(MIN_REFLOW_CACHE_BYTES, Math.min(MAX_REFLOW_CACHE_BYTES, runtimeBudget));
+    }
+
+    private static long estimateTileBytes(int targetWidth, int tileHeight, Bitmap.Config config) {
+        int bytesPerPixel = config == Bitmap.Config.ARGB_8888 ? ARGB_8888_BYTES_PER_PIXEL : RGB_565_BYTES_PER_PIXEL;
+        return (long) Math.max(1, targetWidth) * Math.max(1, tileHeight) * bytesPerPixel;
     }
 
     private static long traceStart() {
@@ -150,6 +177,16 @@ public class ReflowBitmapProcessor {
         if (TRACE_REFLOW_TIMING) {
             long elapsedMicros = (System.nanoTime() - startNanos) / 1000L;
             Log.d(TAG, stage + ": " + (elapsedMicros / 1000f) + " ms");
+        }
+    }
+
+    private static final class TileOptions {
+        final int height;
+        final Bitmap.Config config;
+
+        TileOptions(int height, Bitmap.Config config) {
+            this.height = height;
+            this.config = config;
         }
     }
 
