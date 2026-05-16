@@ -13,6 +13,7 @@ import android.view.ScaleGestureDetector;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
@@ -62,6 +63,8 @@ public class PDFReflowView extends ScrollView {
     private Configurator waitingDocumentConfigurator;
     @Nullable
     private TextView statusView;
+    @Nullable
+    private ProgressBar statusLoadingIndicator;
     @Nullable
     private ReflowDocumentSession documentSession;
     @Nullable
@@ -286,7 +289,7 @@ public class PDFReflowView extends ScrollView {
         ReflowLoadConfig loadConfig = loadConfigurator.toLoadConfig();
         ReflowRenderOptions options = createRenderOptions(loadConfig);
 
-        showStatus("Opening PDF...");
+        showStatusLoading();
         ReflowDocumentSession session = new ReflowDocumentSession(
                 getContext().getApplicationContext(),
                 mainHandler,
@@ -555,6 +558,7 @@ public class PDFReflowView extends ScrollView {
     }
 
     private void showStatus(String message) {
+        removeStatusLoading();
         if (statusView == null) {
             statusView = new TextView(getContext());
             statusView.setGravity(Gravity.CENTER);
@@ -572,9 +576,30 @@ public class PDFReflowView extends ScrollView {
         }
     }
 
+    private void showStatusLoading() {
+        removeStatus();
+        if (statusLoadingIndicator == null) {
+            statusLoadingIndicator = new ProgressBar(getContext(), null, android.R.attr.progressBarStyleSmall);
+            statusLoadingIndicator.setIndeterminate(true);
+        }
+        if (statusLoadingIndicator.getParent() == null && pagesContainer.getChildCount() == 0) {
+            pagesContainer.addView(statusLoadingIndicator, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+            ));
+        }
+    }
+
     private void removeStatus() {
         if (statusView != null && statusView.getParent() == pagesContainer) {
             pagesContainer.removeView(statusView);
+        }
+        removeStatusLoading();
+    }
+
+    private void removeStatusLoading() {
+        if (statusLoadingIndicator != null && statusLoadingIndicator.getParent() == pagesContainer) {
+            pagesContainer.removeView(statusLoadingIndicator);
         }
     }
 

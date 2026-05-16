@@ -10,6 +10,7 @@ import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 
 import androidx.annotation.Nullable;
@@ -25,6 +26,7 @@ final class ReflowPageSlot {
     final Size pageSize;
     final FrameLayout container;
     final TextView placeholder;
+    final ProgressBar loadingIndicator;
     final LinearLayout.LayoutParams layoutParams;
     @Nullable
     final View pageDelimiter;
@@ -51,6 +53,7 @@ final class ReflowPageSlot {
             Size pageSize,
             FrameLayout container,
             TextView placeholder,
+            ProgressBar loadingIndicator,
             LinearLayout.LayoutParams layoutParams,
             @Nullable View pageDelimiter,
             int pageDelimiterHeight,
@@ -61,6 +64,7 @@ final class ReflowPageSlot {
         this.pageSize = pageSize;
         this.container = container;
         this.placeholder = placeholder;
+        this.loadingIndicator = loadingIndicator;
         this.layoutParams = layoutParams;
         this.pageDelimiter = pageDelimiter;
         this.pageDelimiterHeight = pageDelimiterHeight;
@@ -79,6 +83,9 @@ final class ReflowPageSlot {
         placeholder.setTextSize(15f);
         placeholder.setText(defaultPageText(page));
         placeholder.setPadding(paddingPx, paddingPx, paddingPx, paddingPx);
+
+        ProgressBar loadingIndicator = new ProgressBar(context, null, android.R.attr.progressBarStyleSmall);
+        loadingIndicator.setIndeterminate(true);
 
         LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -102,6 +109,7 @@ final class ReflowPageSlot {
                 pageSize,
                 container,
                 placeholder,
+                loadingIndicator,
                 layoutParams,
                 pageDelimiter,
                 pageDelimiterHeight,
@@ -122,7 +130,7 @@ final class ReflowPageSlot {
     void markRenderRequested() {
         renderRequested = true;
         failed = false;
-        placeholder.setText("Reflowing page " + (page + 1) + "...");
+        showLoadingIndicator();
     }
 
     void setRenderCancellationSignal(@Nullable CancellationSignal cancellationSignal) {
@@ -139,6 +147,10 @@ final class ReflowPageSlot {
         }
         renderCancellationSignal = null;
         renderRequested = false;
+        if (result == null && !failed) {
+            placeholder.setText(defaultPageText(page));
+            showContent(placeholder);
+        }
     }
 
     void markRenderSkipped() {
@@ -146,6 +158,7 @@ final class ReflowPageSlot {
         renderCancellationSignal = null;
         if (result == null && !failed) {
             placeholder.setText(defaultPageText(page));
+            showContent(placeholder);
         }
     }
 
@@ -154,6 +167,7 @@ final class ReflowPageSlot {
         renderCancellationSignal = null;
         failed = true;
         placeholder.setText(failedPageText(page));
+        showContent(placeholder);
     }
 
     void bindResult(ReflowBitmapProcessor.Result newResult) {
@@ -239,6 +253,16 @@ final class ReflowPageSlot {
         container.addView(content, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
+        ));
+        addPageDelimiter();
+    }
+
+    private void showLoadingIndicator() {
+        container.removeAllViews();
+        container.addView(loadingIndicator, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.CENTER
         ));
         addPageDelimiter();
     }
