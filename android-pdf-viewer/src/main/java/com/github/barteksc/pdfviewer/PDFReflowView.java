@@ -39,10 +39,10 @@ import java.util.List;
 public class PDFReflowView extends ScrollView {
 
     private static final String TAG = PDFReflowView.class.getSimpleName();
-    private static final float DEFAULT_SOURCE_SCALE = 1.35f;
+    private static final float DEFAULT_SOURCE_SCALE = 1.6f;
     private static final float DEFAULT_TEXT_SIZE_DP = 15f;
-    private static final int DEFAULT_MAX_SOURCE_WIDTH = 1600;
-    private static final int DEFAULT_MAX_SOURCE_PIXELS = 2_400_000;
+    private static final int DEFAULT_MAX_SOURCE_WIDTH = 2200;
+    private static final int DEFAULT_MAX_SOURCE_PIXELS = 3_200_000;
     private static final long MIN_REFLOW_CACHE_BYTES = 16L * 1024L * 1024L;
     private static final long MAX_REFLOW_CACHE_BYTES = 48L * 1024L * 1024L;
 

@@ -20,6 +20,7 @@ import java.util.List;
 public class ReflowBitmapProcessor {
     private static final String TAG = ReflowBitmapProcessor.class.getSimpleName();
     private static final boolean TRACE_REFLOW_TIMING = false;
+    private static final int TINY_TILE_HEIGHT = 1024;
     private static final int SMALL_TILE_HEIGHT = 2048;
     private static final int LARGE_TILE_HEIGHT = 4096;
     private static final int RGB_565_BYTES_PER_PIXEL = 2;
@@ -102,6 +103,7 @@ public class ReflowBitmapProcessor {
                     tileOptions.config,
                     cancellationSignal
             );
+            result = result.withLayoutScale(1f);
             traceTiming("fallback render tiles", stageStart);
             traceTiming("total reflow", totalStart);
             return result;
@@ -121,6 +123,7 @@ public class ReflowBitmapProcessor {
                     tileOptions.config,
                     cancellationSignal
             );
+            result = result.withLayoutScale(1f);
             traceTiming("fallback render tiles", stageStart);
             traceTiming("total reflow", totalStart);
             return result;
@@ -139,7 +142,7 @@ public class ReflowBitmapProcessor {
                 tileOptions.height,
                 tileOptions.config,
                 cancellationSignal
-        );
+        ).withLayoutScale(layout.layoutScale);
         traceTiming("render tiles", stageStart);
         traceTiming("total reflow", totalStart);
         return result;
@@ -153,10 +156,16 @@ public class ReflowBitmapProcessor {
         if (estimateTileBytes(targetWidth, SMALL_TILE_HEIGHT, Bitmap.Config.ARGB_8888) <= perTileBudget) {
             return new TileOptions(SMALL_TILE_HEIGHT, Bitmap.Config.ARGB_8888);
         }
+        if (estimateTileBytes(targetWidth, TINY_TILE_HEIGHT, Bitmap.Config.ARGB_8888) <= perTileBudget) {
+            return new TileOptions(TINY_TILE_HEIGHT, Bitmap.Config.ARGB_8888);
+        }
         if (estimateTileBytes(targetWidth, LARGE_TILE_HEIGHT, Bitmap.Config.RGB_565) <= perTileBudget) {
             return new TileOptions(LARGE_TILE_HEIGHT, Bitmap.Config.RGB_565);
         }
-        return new TileOptions(SMALL_TILE_HEIGHT, Bitmap.Config.RGB_565);
+        if (estimateTileBytes(targetWidth, SMALL_TILE_HEIGHT, Bitmap.Config.RGB_565) <= perTileBudget) {
+            return new TileOptions(SMALL_TILE_HEIGHT, Bitmap.Config.RGB_565);
+        }
+        return new TileOptions(TINY_TILE_HEIGHT, Bitmap.Config.RGB_565);
     }
 
     private static long calculateDefaultCacheBudgetBytes() {
@@ -194,15 +203,25 @@ public class ReflowBitmapProcessor {
         public final List<Bitmap> tiles;
         public final int totalHeight;
         public final long byteCount;
+        public final float layoutScale;
 
         Result(List<Bitmap> tiles, int totalHeight) {
+            this(tiles, totalHeight, 1f);
+        }
+
+        Result(List<Bitmap> tiles, int totalHeight, float layoutScale) {
             this.tiles = Collections.unmodifiableList(new ArrayList<>(tiles));
             this.totalHeight = Math.max(1, totalHeight);
             this.byteCount = calculateByteCount(tiles);
+            this.layoutScale = layoutScale;
         }
 
         static Result empty() {
             return new Result(Collections.emptyList(), 1);
+        }
+
+        Result withLayoutScale(float layoutScale) {
+            return new Result(tiles, totalHeight, layoutScale);
         }
 
         public void recycle() {

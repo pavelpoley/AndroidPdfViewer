@@ -94,7 +94,7 @@ final class ReflowLayoutEngine {
         flushRow(currentRow, placedWords);
         int outputHeight = Math.max(minOutputHeight, y + rowHeight + padding);
         outputHeight = Math.max(1, outputHeight);
-        return new ReflowLayout(placedWords, outputHeight);
+        return new ReflowLayout(placedWords, outputHeight, layoutScale);
     }
 
     private float calculateLayoutScale(

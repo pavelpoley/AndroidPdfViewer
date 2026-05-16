@@ -33,9 +33,11 @@ final class ReflowPlacedWord {
 final class ReflowLayout {
     final List<ReflowPlacedWord> placedWords;
     final int outputHeight;
+    final float layoutScale;
 
-    ReflowLayout(List<ReflowPlacedWord> placedWords, int outputHeight) {
+    ReflowLayout(List<ReflowPlacedWord> placedWords, int outputHeight, float layoutScale) {
         this.placedWords = placedWords;
         this.outputHeight = outputHeight;
+        this.layoutScale = layoutScale;
     }
 }
