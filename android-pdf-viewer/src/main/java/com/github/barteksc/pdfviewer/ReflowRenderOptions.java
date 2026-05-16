@@ -8,6 +8,7 @@ final class ReflowRenderOptions {
     final float sourceScale;
     final int maxSourceWidthPx;
     final int maxSourcePixels;
+    final long maxCachedBitmapBytes;
 
     ReflowRenderOptions(
             int targetWidth,
@@ -16,7 +17,8 @@ final class ReflowRenderOptions {
             int targetTextHeightPx,
             float sourceScale,
             int maxSourceWidthPx,
-            int maxSourcePixels
+            int maxSourcePixels,
+            long maxCachedBitmapBytes
     ) {
         this.targetWidth = targetWidth;
         this.minOutputHeight = minOutputHeight;
@@ -25,5 +27,6 @@ final class ReflowRenderOptions {
         this.sourceScale = sourceScale;
         this.maxSourceWidthPx = maxSourceWidthPx;
         this.maxSourcePixels = maxSourcePixels;
+        this.maxCachedBitmapBytes = maxCachedBitmapBytes;
     }
 }

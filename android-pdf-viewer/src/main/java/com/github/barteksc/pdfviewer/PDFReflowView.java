@@ -43,6 +43,8 @@ public class PDFReflowView extends ScrollView {
     private static final float DEFAULT_TEXT_SIZE_DP = 15f;
     private static final int DEFAULT_MAX_SOURCE_WIDTH = 1200;
     private static final int DEFAULT_MAX_SOURCE_PIXELS = 1_600_000;
+    private static final long MIN_REFLOW_CACHE_BYTES = 16L * 1024L * 1024L;
+    private static final long MAX_REFLOW_CACHE_BYTES = 48L * 1024L * 1024L;
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final LinearLayout pagesContainer;
@@ -189,7 +191,8 @@ public class PDFReflowView extends ScrollView {
                 Math.max(1, dp(loadConfig.textSizeDp)),
                 loadConfig.sourceScale,
                 loadConfig.maxSourceWidthPx,
-                loadConfig.maxSourcePixels
+                loadConfig.maxSourcePixels,
+                calculateMaxCachedBitmapBytes()
         );
     }
 
@@ -313,6 +316,11 @@ public class PDFReflowView extends ScrollView {
 
     private int dp(float value) {
         return Math.round(value * getResources().getDisplayMetrics().density);
+    }
+
+    private long calculateMaxCachedBitmapBytes() {
+        long runtimeBudget = Runtime.getRuntime().maxMemory() / 8L;
+        return Math.max(MIN_REFLOW_CACHE_BYTES, Math.min(MAX_REFLOW_CACHE_BYTES, runtimeBudget));
     }
 
     public interface OnLoadCompleteListener {

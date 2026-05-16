@@ -1,6 +1,5 @@
 package com.github.barteksc.pdfviewer;
 
-import android.graphics.Bitmap;
 import android.os.Handler;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -11,7 +10,6 @@ import java.util.List;
 
 final class ReflowRenderCoordinator {
     private static final int PAGE_PREFETCH_RADIUS = 1;
-    private static final int MAX_RENDERED_PAGES = 4;
     private static final int RENDER_DEBOUNCE_MS = 80;
     private static final int ANCHOR_USER_SCROLL_TOLERANCE_DP = 8;
 
@@ -115,9 +113,11 @@ final class ReflowRenderCoordinator {
 
         int renderStart = Math.max(0, visibleStart - PAGE_PREFETCH_RADIUS);
         int renderEnd = Math.min(pageSlots.size() - 1, visibleEnd + PAGE_PREFETCH_RADIUS);
-        for (int distance = 1; distance <= PAGE_PREFETCH_RADIUS; distance++) {
-            requestRenderPage(visibleStart - distance);
-            requestRenderPage(visibleEnd + distance);
+        if (cachedBitmapBytes() < options.maxCachedBitmapBytes) {
+            for (int distance = 1; distance <= PAGE_PREFETCH_RADIUS; distance++) {
+                requestRenderPage(visibleStart - distance);
+                requestRenderPage(visibleEnd + distance);
+            }
         }
 
         recycleFarPages(renderStart, renderEnd);
@@ -129,7 +129,7 @@ final class ReflowRenderCoordinator {
         }
 
         ReflowPageSlot slot = pageSlots.get(page);
-        if (slot.bitmap != null || slot.renderRequested) {
+        if (slot.hasRenderedContent() || slot.renderRequested) {
             return;
         }
 
@@ -152,8 +152,8 @@ final class ReflowRenderCoordinator {
                     }
 
                     @Override
-                    public void onRendered(int callbackPage, Bitmap bitmap) {
-                        handleRenderedPage(generation, callbackPage, bitmap);
+                    public void onRendered(int callbackPage, ReflowBitmapProcessor.Result result) {
+                        handleRenderedPage(generation, callbackPage, result);
                     }
 
                     @Override
@@ -169,15 +169,15 @@ final class ReflowRenderCoordinator {
         );
     }
 
-    private void handleRenderedPage(int generation, int page, Bitmap bitmap) {
+    private void handleRenderedPage(int generation, int page, ReflowBitmapProcessor.Result result) {
         if (!isCurrent(generation) || page < 0 || page >= pageSlots.size()) {
-            bitmap.recycle();
+            result.recycle();
             return;
         }
 
         ReflowPageSlot slot = pageSlots.get(page);
         ReflowScrollAnchor anchor = ReflowScrollAnchor.capture(pageSlots, scrollView.getScrollY());
-        slot.bindBitmap(bitmap);
+        slot.bindResult(result);
         restoreAnchorAfterLayout(anchor);
         recycleFarPages(
                 Math.max(0, visibleStart - PAGE_PREFETCH_RADIUS),
@@ -198,26 +198,25 @@ final class ReflowRenderCoordinator {
     }
 
     private void recycleFarPages(int keepStart, int keepEnd) {
-        int renderedCount = 0;
-        int visibleCenter = (visibleStart + visibleEnd) / 2;
-
         for (int i = 0; i < pageSlots.size(); i++) {
             ReflowPageSlot slot = pageSlots.get(i);
-            if (slot.bitmap == null) {
+            if (!slot.hasRenderedContent()) {
                 continue;
             }
             if (i < keepStart || i > keepEnd) {
                 slot.recycleBitmap();
-            } else {
-                renderedCount++;
             }
         }
+        trimCacheToBudget();
+    }
 
-        while (renderedCount > MAX_RENDERED_PAGES) {
+    private void trimCacheToBudget() {
+        int visibleCenter = (visibleStart + visibleEnd) / 2;
+        while (cachedBitmapBytes() > options.maxCachedBitmapBytes) {
             ReflowPageSlot farthest = null;
             int farthestDistance = -1;
             for (ReflowPageSlot slot : pageSlots) {
-                if (slot.bitmap == null || (slot.page >= visibleStart && slot.page <= visibleEnd)) {
+                if (!slot.hasRenderedContent() || (slot.page >= visibleStart && slot.page <= visibleEnd)) {
                     continue;
                 }
                 int distance = Math.abs(slot.page - visibleCenter);
@@ -230,8 +229,15 @@ final class ReflowRenderCoordinator {
                 break;
             }
             farthest.recycleBitmap();
-            renderedCount--;
         }
+    }
+
+    private long cachedBitmapBytes() {
+        long bytes = 0L;
+        for (ReflowPageSlot slot : pageSlots) {
+            bytes += slot.cachedBytes();
+        }
+        return bytes;
     }
 
     private void restoreAnchorAfterLayout(ReflowScrollAnchor anchor) {

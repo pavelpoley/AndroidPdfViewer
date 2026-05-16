@@ -12,7 +12,11 @@ import android.widget.TextView;
 
 import androidx.annotation.Nullable;
 
+import com.github.barteksc.pdfviewer.reflow.ReflowBitmapProcessor;
 import com.vivlio.android.pdfium.util.Size;
+
+import java.util.ArrayList;
+import java.util.List;
 
 final class ReflowPageSlot {
     final int page;
@@ -24,14 +28,15 @@ final class ReflowPageSlot {
     int currentHeight;
 
     @Nullable
-    ImageView imageView;
+    ReflowBitmapProcessor.Result result;
     @Nullable
-    Bitmap bitmap;
+    LinearLayout tilesContainer;
 
     boolean renderRequested;
     boolean failed;
 
     private final Context context;
+    private final List<ImageView> tileViews = new ArrayList<>();
 
     private ReflowPageSlot(
             Context context,
@@ -96,7 +101,7 @@ final class ReflowPageSlot {
 
     void markRenderSkipped() {
         renderRequested = false;
-        if (bitmap == null && !failed) {
+        if (result == null && !failed) {
             placeholder.setText(defaultPageText(page));
         }
     }
@@ -107,27 +112,38 @@ final class ReflowPageSlot {
         placeholder.setText(failedPageText(page));
     }
 
-    void bindBitmap(Bitmap newBitmap) {
-        if (bitmap != null && !bitmap.isRecycled()) {
-            bitmap.recycle();
-        }
+    void bindResult(ReflowBitmapProcessor.Result newResult) {
+        releaseBitmap();
         renderRequested = false;
         failed = false;
-        bitmap = newBitmap;
+        result = newResult;
 
-        if (imageView == null) {
-            imageView = new ImageView(context);
-            imageView.setBackgroundColor(Color.WHITE);
-            imageView.setScaleType(ImageView.ScaleType.FIT_XY);
+        if (tilesContainer == null) {
+            tilesContainer = new LinearLayout(context);
+            tilesContainer.setOrientation(LinearLayout.VERTICAL);
+            tilesContainer.setBackgroundColor(Color.WHITE);
         }
-        imageView.setImageBitmap(newBitmap);
+        tilesContainer.removeAllViews();
+        tileViews.clear();
+
+        for (Bitmap tile : newResult.tiles) {
+            ImageView tileView = new ImageView(context);
+            tileView.setBackgroundColor(Color.WHITE);
+            tileView.setScaleType(ImageView.ScaleType.FIT_XY);
+            tileView.setImageBitmap(tile);
+            tilesContainer.addView(tileView, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    Math.max(1, tile.getHeight())
+            ));
+            tileViews.add(tileView);
+        }
 
         container.removeAllViews();
-        container.addView(imageView, new FrameLayout.LayoutParams(
+        container.addView(tilesContainer, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
         ));
-        updateHeight(Math.max(1, newBitmap.getHeight()));
+        updateHeight(newResult.totalHeight);
     }
 
     void resetForViewport(ReflowRenderOptions options) {
@@ -149,14 +165,26 @@ final class ReflowPageSlot {
     }
 
     void releaseBitmap() {
-        if (bitmap != null && !bitmap.isRecycled()) {
-            bitmap.recycle();
+        if (result != null) {
+            result.recycle();
         }
-        bitmap = null;
+        result = null;
         renderRequested = false;
-        if (imageView != null) {
-            imageView.setImageDrawable(null);
+        for (ImageView tileView : tileViews) {
+            tileView.setImageDrawable(null);
         }
+        tileViews.clear();
+        if (tilesContainer != null) {
+            tilesContainer.removeAllViews();
+        }
+    }
+
+    boolean hasRenderedContent() {
+        return result != null;
+    }
+
+    long cachedBytes() {
+        return result == null ? 0L : result.byteCount;
     }
 
     void updateHeight(int height) {

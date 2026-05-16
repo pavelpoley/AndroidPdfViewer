@@ -151,9 +151,9 @@ final class ReflowDocumentSession {
             return;
         }
 
-        Bitmap reflowed;
+        ReflowBitmapProcessor.Result reflowed;
         try {
-            reflowed = processor.reflow(
+            reflowed = processor.reflowToResult(
                     pageBitmap,
                     options.targetWidth,
                     options.minOutputHeight,
@@ -270,7 +270,7 @@ final class ReflowDocumentSession {
 
         boolean isCancelled();
 
-        void onRendered(int page, Bitmap bitmap);
+        void onRendered(int page, ReflowBitmapProcessor.Result result);
 
         void onSkipped(int page);
 

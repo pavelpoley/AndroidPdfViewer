@@ -7,7 +7,6 @@ import java.util.Collections;
 import java.util.List;
 
 final class ReflowLayoutEngine {
-    private static final int MAX_OUTPUT_HEIGHT = 16000;
     private static final float MIN_LAYOUT_SCALE = 0.85f;
     private static final float MAX_LAYOUT_SCALE = 3f;
 
@@ -77,7 +76,7 @@ final class ReflowLayoutEngine {
 
         flushRow(currentRow, placedWords);
         int outputHeight = Math.max(minOutputHeight, y + rowHeight + padding);
-        outputHeight = Math.max(1, Math.min(outputHeight, MAX_OUTPUT_HEIGHT));
+        outputHeight = Math.max(1, outputHeight);
         return new ReflowLayout(placedWords, outputHeight);
     }
 
