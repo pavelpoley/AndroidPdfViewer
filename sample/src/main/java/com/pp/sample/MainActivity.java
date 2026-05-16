@@ -310,12 +310,17 @@ public class MainActivity extends AppCompatActivity {
                 });
         configurator.load();
         if (reflowMode) {
-            loadReflowPdf();
+            loadReflowPdf(0);
         }
         updateReflowModeViews();
     }
 
     private void setReflowMode(boolean enabled) {
+        if (reflowMode == enabled) {
+            return;
+        }
+
+        int targetPage = enabled ? binding.pdfView.getCurrentPage() : binding.reflowView.getCurrentPage();
         reflowMode = enabled;
         hidePopupMenu();
         if (bottomSheetBehavior != null) {
@@ -328,9 +333,14 @@ public class MainActivity extends AppCompatActivity {
         hideSearchNavigation();
 
         if (reflowMode && !reflowLoaded) {
-            loadReflowPdf();
+            loadReflowPdf(targetPage);
         }
         updateReflowModeViews();
+        if (reflowMode) {
+            binding.reflowView.jumpTo(targetPage);
+        } else {
+            binding.pdfView.jumpTo(targetPage, false);
+        }
     }
 
     private void updateReflowModeViews() {
@@ -347,7 +357,7 @@ public class MainActivity extends AppCompatActivity {
         binding.reflowTextIncrease.setEnabled(currentReflowTextSizeDp < MAX_REFLOW_TEXT_SIZE_DP);
     }
 
-    private void loadReflowPdf() {
+    private void loadReflowPdf(int initialPage) {
         if (currentPdfUri == null) {
             binding.reflowView.fromAsset("sample.pdf")
                     .textSizeDp(currentReflowTextSizeDp)
@@ -359,6 +369,7 @@ public class MainActivity extends AppCompatActivity {
                     .onError(throwable -> Log.e(TAG, "Unable to reflow selected PDF", throwable))
                     .load();
         }
+        binding.reflowView.jumpTo(initialPage);
         reflowLoaded = true;
     }
 
@@ -373,9 +384,10 @@ public class MainActivity extends AppCompatActivity {
 
         currentReflowTextSizeDp = nextSize;
         if (reflowMode) {
+            int targetPage = binding.reflowView.getCurrentPage();
             reflowLoaded = false;
             binding.reflowView.recycle();
-            loadReflowPdf();
+            loadReflowPdf(targetPage);
         }
         updateReflowModeViews();
     }

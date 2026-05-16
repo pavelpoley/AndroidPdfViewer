@@ -9,6 +9,7 @@ import android.util.AttributeSet;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.ViewGroup;
+import android.view.ViewTreeObserver;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -45,6 +46,7 @@ public class PDFReflowView extends ScrollView {
     private static final int DEFAULT_MAX_SOURCE_PIXELS = 3_200_000;
     private static final long MIN_REFLOW_CACHE_BYTES = 16L * 1024L * 1024L;
     private static final long MAX_REFLOW_CACHE_BYTES = 48L * 1024L * 1024L;
+    private static final int NO_PENDING_JUMP_PAGE = -1;
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final LinearLayout pagesContainer;
@@ -60,7 +62,11 @@ public class PDFReflowView extends ScrollView {
     private ReflowRenderCoordinator renderCoordinator;
     @Nullable
     private ReflowLoadConfig currentConfig;
+    @Nullable
+    private ViewTreeObserver.OnPreDrawListener pendingJumpPreDrawListener;
 
+    private int pendingJumpPage = NO_PENDING_JUMP_PAGE;
+    private boolean pendingJumpSmooth;
     private volatile int loadGeneration = 0;
 
     public PDFReflowView(Context context) {
@@ -111,6 +117,8 @@ public class PDFReflowView extends ScrollView {
 
     public void recycle() {
         waitingDocumentConfigurator = null;
+        pendingJumpPage = NO_PENDING_JUMP_PAGE;
+        clearPendingJumpRetry();
         disposeCurrentLoad();
         pagesContainer.removeAllViews();
         pageSlots.clear();
@@ -141,12 +149,54 @@ public class PDFReflowView extends ScrollView {
         return new Configurator(documentSource);
     }
 
+    public int getPageCount() {
+        return pageSlots.size();
+    }
+
+    public int getCurrentPage() {
+        if (pageSlots.isEmpty()) {
+            return Math.max(0, pendingJumpPage);
+        }
+
+        int viewportCenter = getScrollY() + Math.max(1, getHeight()) / 2;
+        for (ReflowPageSlot slot : pageSlots) {
+            if (viewportCenter <= slot.container.getBottom()) {
+                return slot.page;
+            }
+        }
+        return pageSlots.get(pageSlots.size() - 1).page;
+    }
+
+    public void jumpTo(int page) {
+        jumpTo(page, false);
+    }
+
+    public void jumpTo(int page, boolean smooth) {
+        int targetPage = clampPage(page);
+        if (!canResolvePagePosition(targetPage)) {
+            pendingJumpPage = targetPage;
+            pendingJumpSmooth = smooth;
+            requestPendingJumpRetry();
+            return;
+        }
+
+        pendingJumpPage = NO_PENDING_JUMP_PAGE;
+        int targetScrollY = pageSlots.get(targetPage).container.getTop();
+        if (smooth) {
+            smoothScrollTo(0, targetScrollY);
+        } else {
+            scrollTo(0, targetScrollY);
+        }
+        scheduleVisibleRender();
+    }
+
     private void load(@NonNull Configurator configurator) {
         if (getWidth() == 0) {
             waitingDocumentConfigurator = configurator.copy();
             return;
         }
 
+        clearPendingJumpRetry();
         disposeCurrentLoad();
         pagesContainer.removeAllViews();
         pageSlots.clear();
@@ -233,7 +283,16 @@ public class PDFReflowView extends ScrollView {
             loadConfig.onLoadCompleteListener.loadComplete(pageSizes.length);
         }
 
-        pagesContainer.post(this::scheduleVisibleRender);
+        if (pendingJumpPage != NO_PENDING_JUMP_PAGE) {
+            requestPendingJumpRetry();
+        }
+        pagesContainer.post(() -> {
+            if (pendingJumpPage != NO_PENDING_JUMP_PAGE) {
+                applyPendingJumpIfReady();
+            } else {
+                scheduleVisibleRender();
+            }
+        });
     }
 
     private void scheduleVisibleRender() {
@@ -253,6 +312,61 @@ public class PDFReflowView extends ScrollView {
 
     private int getPageWidth() {
         return Math.max(1, getWidth() - getPaddingLeft() - getPaddingRight());
+    }
+
+    private int clampPage(int page) {
+        if (pageSlots.isEmpty()) {
+            return Math.max(0, page);
+        }
+        return Math.max(0, Math.min(pageSlots.size() - 1, page));
+    }
+
+    private boolean canResolvePagePosition(int page) {
+        return !pageSlots.isEmpty()
+                && page >= 0
+                && page < pageSlots.size()
+                && pagesContainer.isLaidOut()
+                && pageSlots.get(page).container.isLaidOut();
+    }
+
+    private void requestPendingJumpRetry() {
+        if (pageSlots.isEmpty() || pendingJumpPreDrawListener != null) {
+            return;
+        }
+        pendingJumpPreDrawListener = new ViewTreeObserver.OnPreDrawListener() {
+            @Override
+            public boolean onPreDraw() {
+                clearPendingJumpRetry();
+                applyPendingJumpIfReady();
+                return true;
+            }
+        };
+        pagesContainer.getViewTreeObserver().addOnPreDrawListener(pendingJumpPreDrawListener);
+    }
+
+    private void clearPendingJumpRetry() {
+        if (pendingJumpPreDrawListener == null) {
+            return;
+        }
+        ViewTreeObserver observer = pagesContainer.getViewTreeObserver();
+        if (observer.isAlive()) {
+            observer.removeOnPreDrawListener(pendingJumpPreDrawListener);
+        }
+        pendingJumpPreDrawListener = null;
+    }
+
+    private void applyPendingJumpIfReady() {
+        if (pendingJumpPage == NO_PENDING_JUMP_PAGE) {
+            return;
+        }
+        int targetPage = clampPage(pendingJumpPage);
+        if (!canResolvePagePosition(targetPage)) {
+            return;
+        }
+        boolean smooth = pendingJumpSmooth;
+        pendingJumpPage = NO_PENDING_JUMP_PAGE;
+        clearPendingJumpRetry();
+        jumpTo(targetPage, smooth);
     }
 
     private void postError(ReflowLoadConfig loadConfig, int generation, Throwable throwable) {

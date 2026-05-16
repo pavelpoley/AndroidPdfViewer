@@ -5,6 +5,7 @@ import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.os.CancellationSignal;
 import android.view.Gravity;
+import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
@@ -25,6 +26,9 @@ final class ReflowPageSlot {
     final FrameLayout container;
     final TextView placeholder;
     final LinearLayout.LayoutParams layoutParams;
+    @Nullable
+    final View pageDelimiter;
+    final int pageDelimiterHeight;
     int estimatedHeight;
     int currentHeight;
 
@@ -48,6 +52,8 @@ final class ReflowPageSlot {
             FrameLayout container,
             TextView placeholder,
             LinearLayout.LayoutParams layoutParams,
+            @Nullable View pageDelimiter,
+            int pageDelimiterHeight,
             int estimatedHeight
     ) {
         this.context = context;
@@ -56,6 +62,8 @@ final class ReflowPageSlot {
         this.container = container;
         this.placeholder = placeholder;
         this.layoutParams = layoutParams;
+        this.pageDelimiter = pageDelimiter;
+        this.pageDelimiterHeight = pageDelimiterHeight;
         this.estimatedHeight = estimatedHeight;
         this.currentHeight = estimatedHeight;
     }
@@ -72,11 +80,6 @@ final class ReflowPageSlot {
         placeholder.setText(defaultPageText(page));
         placeholder.setPadding(paddingPx, paddingPx, paddingPx, paddingPx);
 
-        container.addView(placeholder, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-        ));
-
         LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 estimatedHeight
@@ -85,7 +88,27 @@ final class ReflowPageSlot {
             layoutParams.topMargin = options.pageSpacingPx;
         }
 
-        return new ReflowPageSlot(context, page, pageSize, container, placeholder, layoutParams, estimatedHeight);
+        View pageDelimiter = null;
+        int pageDelimiterHeight = 0;
+        if (page > 0) {
+            pageDelimiter = new View(context);
+            pageDelimiter.setBackgroundColor(Color.rgb(238, 238, 238));
+            pageDelimiterHeight = Math.max(1, Math.round(context.getResources().getDisplayMetrics().density));
+        }
+
+        ReflowPageSlot slot = new ReflowPageSlot(
+                context,
+                page,
+                pageSize,
+                container,
+                placeholder,
+                layoutParams,
+                pageDelimiter,
+                pageDelimiterHeight,
+                estimatedHeight
+        );
+        slot.showContent(placeholder);
+        return slot;
     }
 
     static int estimateHeight(Size pageSize, ReflowRenderOptions options) {
@@ -160,11 +183,7 @@ final class ReflowPageSlot {
             tileViews.add(tileView);
         }
 
-        container.removeAllViews();
-        container.addView(tilesContainer, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-        ));
+        showContent(tilesContainer);
         updateHeight(newResult.totalHeight);
     }
 
@@ -177,12 +196,8 @@ final class ReflowPageSlot {
 
     void recycleBitmap() {
         releaseBitmap();
-        container.removeAllViews();
         placeholder.setText(failed ? failedPageText(page) : defaultPageText(page));
-        container.addView(placeholder, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-        ));
+        showContent(placeholder);
         updateHeight(currentHeight);
     }
 
@@ -217,6 +232,26 @@ final class ReflowPageSlot {
         currentHeight = Math.max(1, height);
         layoutParams.height = currentHeight;
         container.setLayoutParams(layoutParams);
+    }
+
+    private void showContent(View content) {
+        container.removeAllViews();
+        container.addView(content, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+        ));
+        addPageDelimiter();
+    }
+
+    private void addPageDelimiter() {
+        if (pageDelimiter == null) {
+            return;
+        }
+        container.addView(pageDelimiter, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                pageDelimiterHeight,
+                Gravity.TOP
+        ));
     }
 
     private static String defaultPageText(int page) {
